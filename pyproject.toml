@@ -1,0 +1,63 @@
+[project]
+name = "ctxure"
+version = "1.0.0"
+description = "Context-aware conversion between structured and unstructured Python data using multiple dispatch"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["dataclass", "typeddict", "deserialization", "serialization", "multiple dispatch", "multimethod", "multidispatch"]
+requires-python = ">=3.11"
+dependencies = [
+    "typing-extensions>=4.13.0"
+]
+authors = [
+    {name = "deokjae", email = "cpcprmrm.sand@gmail.com"}
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+
+[project.urls]
+Repository = "https://github.com/cpcprmrm/ctxure"
+
+[dependency-groups]
+dev = [
+    "pyright",
+    "pytest",
+    "pytest-cov",
+    "ruff"
+]
+
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.pyright]
+reportRedeclaration = false
+reportUnusedImport = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+ignore = [
+    "F811",  # We have multidispatch
+    "F722",  # For Ctx
+    "E741"   # Single character variable name
+]
+
+[tool.ruff.lint.per-file-ignores]
+"test/*" = ["E712"]  # Allow explicit comparison to True/False
