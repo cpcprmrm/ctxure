@@ -1,6 +1,6 @@
 [project]
 name = "ctxure"
-version = "1.0.0"
+version = "1.0.1"
 description = "Context-aware conversion between structured and unstructured Python data using multiple dispatch"
 readme = "README.md"
 license = "MIT"
