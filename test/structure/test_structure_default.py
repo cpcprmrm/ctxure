@@ -1017,6 +1017,12 @@ def test_structure_primitive_union():
     assert e.value.data is None
 
     with pytest.raises(NoStructureHook) as e:
+        structure(int | str, {"a": 1})
+    assert e.value.ctx.structured_type == int | str
+    assert e.value.ctx.structured_path == "$"
+    assert e.value.data == {"a": 1}
+
+    with pytest.raises(NoStructureHook) as e:
         structure(list[int | str], [1, None])
     assert e.value.ctx.structured_type == int | str
     assert e.value.ctx.structured_path == "$[1]"

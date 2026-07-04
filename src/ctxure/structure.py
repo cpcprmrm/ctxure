@@ -784,7 +784,7 @@ def _structure_default(ctx: CtxImpl[UnionBase, Any, Any, Any], data: Any, *, key
     if probed_raw is None:
         raise AmbiguousUnion(ctx, data, "A union member causes ambiguous dispatch with the data")
     probed_all = [c for c, _ in probed_raw]
-    if issubclass(type(data), dict) and all(_is_dataclass_or_typeddict(c) for c in probed_all):
+    if probed_all and issubclass(type(data), dict) and all(_is_dataclass_or_typeddict(c) for c in probed_all):
         discriminator = generate_decision_func(probed_all)
         if discriminator is not None:
             return DataClassTypedDictUnionExe(discriminator)
