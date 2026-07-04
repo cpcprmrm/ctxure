@@ -121,36 +121,34 @@ _MAX_KEYMAP_CACHE_ENTRY = 16
 @typing.no_type_check
 def structure_default(ctx: CtxImpl, data: Any, keymap: dict[str, str] | None = None) -> Any:
     exe_holder = ctx._site.exe
-    _structure_default = config._dispatcher.get().dispatch["_structure_default"]
-    if (exe := exe_holder.default_exe) is None:
-        exe = _structure_default(ctx, data, keymap=keymap)
-        exe_holder.default_exe = exe
-        exe_holder.keymap = keymap
-        exe_holder.keymap_cache = {id(keymap): (exe, keymap)}
-    if exe_holder.keymap is not keymap:
-        cached = exe_holder.keymap_cache.get(id(keymap))
-        if cached is None or cached[1] is not keymap:
-            exe = _structure_default(ctx, data, keymap=keymap)
-            exe_holder.default_exe = exe
-            exe_holder.keymap = keymap
-            if len(exe_holder.keymap_cache) == _MAX_KEYMAP_CACHE_ENTRY:
-                exe_holder.keymap_cache.clear()
-            exe_holder.keymap_cache[id(keymap)] = (exe, keymap)
-        else:
-            exe = cached[0]
-            exe_holder.default_exe = exe
-            exe_holder.keymap = keymap
+    dtype = ctx._site.dtype(data)
+    if exe_holder.default_exe is not None and exe_holder.default_dtype == dtype and exe_holder.keymap is keymap:
+        return exe_holder.default_exe(ctx, data)
+    cache = exe_holder.keymap_cache
+    if cache is None:
+        cache = exe_holder.keymap_cache = {}
+    cache_key = (dtype, id(keymap))
+    cached = cache.get(cache_key)
+    if cached is None or cached[1] is not keymap:
+        exe = config._dispatcher.get().dispatch["_structure_default"](ctx, data, keymap=keymap)
+        if len(cache) >= _MAX_KEYMAP_CACHE_ENTRY:
+            cache.clear()
+        cache[cache_key] = (exe, keymap)
+    else:
+        exe = cached[0]
+    exe_holder.default_exe = exe
+    exe_holder.default_dtype = dtype
+    exe_holder.keymap = keymap
     return exe(ctx, data)
 
 
 def structure_by_type(ctx: CtxImpl, data: Any) -> Any:
     exe_holder = cast(HookExe, ctx._site.exe)  # type: ignore
-    type_only_ctx, exe = exe_holder.by_type_exe or (None, None)
-    if type_only_ctx is None or exe is None:
-        type_only_ctx = ctx._strip()
-        exe = _structure_exe(type_only_ctx, data)
-        exe_holder.by_type_exe = (type_only_ctx, exe)
-    return exe(type_only_ctx, data)
+    site = exe_holder.by_type_site
+    if site is None:
+        site = StructureSite(ctx._strip())
+        exe_holder.by_type_site = site
+    return site(data)
 
 
 def _structure_site(ctx: Any) -> Site:

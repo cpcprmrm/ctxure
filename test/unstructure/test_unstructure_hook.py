@@ -755,6 +755,35 @@ def test_unstructure_with_stripped_ctx_child_get_owner(testregister):
         assert unstructure(Wrapper, Wrapper(Inner("hello"))) == {"inner": {"val": "HELLO_wrapped"}}
 
 
+def test_unstructure_by_type_redispatches_per_data_type(testregister):
+    @dataclass
+    class Target:
+        x: int
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Target], data: Target) -> str:
+        return f"T:{data.x}"
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Target], data: dict) -> str:
+        return f"D:{data['x']}"
+
+    @dataclass
+    class Owner:
+        inner: Target
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Target, Of[Owner]], data: Target) -> object:
+        if data.x % 2:
+            return unstructure_by_type(ctx, {"x": data.x})  # dict path
+        return unstructure_by_type(ctx, data)  # Target path
+
+    with ctxure_config(dispatcher=testregister):
+        assert unstructure(Owner, Owner(Target(4))) == {"inner": "T:4"}
+        assert unstructure(Owner, Owner(Target(5))) == {"inner": "D:5"}
+        assert unstructure(Owner, Owner(Target(6))) == {"inner": "T:6"}
+
+
 def test_unstructure_hook_ambiguous_at_union_member(testregister):
     @testregister.ctx_subtypes
     def unstructure_hook(ctx: Ctx[int | float], data: int) -> int:

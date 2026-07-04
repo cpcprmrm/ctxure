@@ -126,6 +126,24 @@ def test_unstructure_child_site_hook_free_flag_dataclass(testregister):
         assert counter.count == 0
 
 
+def test_unstructure_default_redispatches_per_data_type(testregister):
+    # unstructure_default must re-resolve the default exe per data type, not reuse
+    # an exe built for the first data type it saw.
+    @dataclass
+    class U:
+        payload: int | str
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[int | str], data: object) -> object:
+        return unstructure_default(ctx, data)
+
+    with ctxure_config(dispatcher=testregister):
+        assert unstructure(U, U(5)) == {"payload": 5}
+        assert unstructure(U, U("hello")) == {"payload": "hello"}
+        assert unstructure(U, U(7)) == {"payload": 7}
+        assert unstructure(U, U("bye")) == {"payload": "bye"}
+
+
 def test_unstructure_default_keymap_secondary_cache(testregister):
     @dataclass
     class Foo:
@@ -145,15 +163,17 @@ def test_unstructure_default_keymap_secondary_cache(testregister):
         unstructure(Foo, Foo(-1, 2))
 
         exe_holder = testregister.unstructure_cache.get(Foo).exe
-        exe1 = exe_holder.keymap_cache[id(keymap1)][0]
-        exe2 = exe_holder.keymap_cache[id(keymap2)][0]
+        # The default-exe cache is keyed by (data dtype, id(keymap)); here the data
+        # is always a Foo instance, so dtype is `Foo`.
+        exe1 = exe_holder.keymap_cache[(Foo, id(keymap1))][0]
+        exe2 = exe_holder.keymap_cache[(Foo, id(keymap2))][0]
 
         for _ in range(4):
             unstructure(Foo, Foo(1, 3))
             unstructure(Foo, Foo(-1, 3))
 
-        assert exe_holder.keymap_cache[id(keymap1)][0] is exe1
-        assert exe_holder.keymap_cache[id(keymap2)][0] is exe2
+        assert exe_holder.keymap_cache[(Foo, id(keymap1))][0] is exe1
+        assert exe_holder.keymap_cache[(Foo, id(keymap2))][0] is exe2
 
 
 def test_unstructure_extra_updated_on_cached_site(testregister):

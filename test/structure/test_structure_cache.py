@@ -147,16 +147,36 @@ def test_structure_default_keymap_secondary_cache(testregister):
         structure(Foo, {"a": -1, "_b": 2})
 
         exe_holder = testregister.structure_cache.get(Foo).exe
-        exe1 = exe_holder.keymap_cache[id(keymap1)][0]
-        exe2 = exe_holder.keymap_cache[id(keymap2)][0]
+        # The default-exe cache is keyed by (data dtype, id(keymap)); here the data
+        # is always a dict, so dtype is `dict`.
+        exe1 = exe_holder.keymap_cache[(dict, id(keymap1))][0]
+        exe2 = exe_holder.keymap_cache[(dict, id(keymap2))][0]
 
         # Alternate several times — secondary cache must reuse the same exe objects
         for _ in range(4):
             structure(Foo, {"a": 1, "B": 3})
             structure(Foo, {"a": -1, "_b": 3})
 
-        assert exe_holder.keymap_cache[id(keymap1)][0] is exe1
-        assert exe_holder.keymap_cache[id(keymap2)][0] is exe2
+        assert exe_holder.keymap_cache[(dict, id(keymap1))][0] is exe1
+        assert exe_holder.keymap_cache[(dict, id(keymap2))][0] is exe2
+
+
+def test_structure_default_redispatches_per_data_type(testregister):
+    # structure_default must re-resolve the default exe per data type, not reuse
+    # an exe built for the first data type it saw.
+    @dataclass
+    class W:
+        payload: int | str
+
+    @testregister
+    def structure_hook(ctx: Ctx[int | str], data: dict) -> object:
+        return structure_default(ctx, data["v"])
+
+    with ctxure_config(dispatcher=testregister):
+        assert structure(W, {"payload": {"v": 5}}) == W(5)
+        assert structure(W, {"payload": {"v": "hello"}}) == W("hello")
+        assert structure(W, {"payload": {"v": 7}}) == W(7)
+        assert structure(W, {"payload": {"v": "bye"}}) == W("bye")
 
 
 def test_structure_extra_updated_on_cached_site(testregister):

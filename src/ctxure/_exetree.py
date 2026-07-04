@@ -94,18 +94,20 @@ _KeymapType = dict[str, str]
 
 
 class HookExe:
-    __slots__ = ("hook", "default_exe", "by_type_exe", "keymap", "keymap_cache")
+    __slots__ = ("hook", "default_exe", "default_dtype", "by_type_site", "keymap", "keymap_cache")
 
     hook: Method
     default_exe: Exe | None
-    by_type_exe: tuple[CtxImpl, Exe] | None
+    default_dtype: Any
+    by_type_site: "Site | None"
     keymap: _KeymapType | None
-    keymap_cache: dict[int, tuple[Exe, _KeymapType]] | None
+    keymap_cache: dict[tuple[Any, int], tuple[Exe, _KeymapType]] | None
 
     def __init__(self, hook: Method):
         self.hook = hook
         self.default_exe = None
-        self.by_type_exe = None
+        self.default_dtype = None
+        self.by_type_site = None
         self.keymap = None
         self.keymap_cache = None
 

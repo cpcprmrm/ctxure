@@ -789,6 +789,31 @@ def test_structure_with_stripped_ctx_child_get_owner(testregister):
         assert structure(Wrapper, {"inner": {"val": "hello"}}) == Wrapper(Inner("HELLO_wrapped"))
 
 
+def test_structure_by_type_redispatches_per_data_type(testregister):
+    @dataclass
+    class Target:
+        x: int
+
+    @testregister
+    def structure_hook(ctx: Ctx[Target], data: str) -> Target:
+        return Target(int(data))
+
+    @dataclass
+    class Owner:
+        inner: Target
+
+    @testregister
+    def structure_hook(ctx: Ctx[Target, Of[Owner]], data: dict) -> Target:
+        if data.get("form") == "str":
+            return structure_by_type(ctx, data["val"])  # str -> type-only str hook
+        return structure_by_type(ctx, {"x": data["val"]})  # dict -> default dataclass
+
+    with ctxure_config(dispatcher=testregister):
+        assert structure(Owner, {"inner": {"form": "dict", "val": 10}}) == Owner(Target(10))
+        assert structure(Owner, {"inner": {"form": "str", "val": "20"}}) == Owner(Target(20))
+        assert structure(Owner, {"inner": {"form": "dict", "val": 30}}) == Owner(Target(30))
+
+
 def test_register_general_multimethod(testregister):
     with pytest.raises(TypeError):
 
