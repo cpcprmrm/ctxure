@@ -859,18 +859,23 @@ def _unstructure_default(
     field_types = resolve_field_types(ctx.structured_type)
     names = [f.name for f, _ in field_types]
     keys = resolve_keys(ctx, data, names, keymap)
-    _reject_multikey(ctx, data, names, keys)
+    _check_keys(ctx, data, names, keys)
     return DataClassExe(ctx, field_types, [k[0] for k in keys])
 
 
-def _reject_multikey(ctx: CtxImpl, data: Any, names: list[str], keys: list[KeyTuple]) -> None:
+def _check_keys(ctx: CtxImpl, data: Any, names: list[str], keys: list[KeyTuple]) -> None:
+    seen: dict[KeyTuple, str] = {}
     for name, k in zip(names, keys):
+        key = k[0]
         if len(k) > 1:
             raise ValidationError(
                 ctx,
                 data,
                 f"KeyPath with multiple keys is not supported by unstructure_default: {name!r} -> {KeyPath(*k)!r}",
             )
+        # Two fields written to one key would silently overwrite each other.
+        if (other := seen.setdefault(k, name)) != name:
+            raise ValidationError(ctx, data, f"keymap maps {other!r} and {name!r} to the same key {key!r}")
 
 
 @register
@@ -954,7 +959,7 @@ def _unstructure_default(ctx: CtxImpl[TypedDictBase, Any, Any, Any], data: dict,
     field_types = resolve_typeddict_field_types(ctx.structured_type)
     names = [name for name, _ in field_types]
     keys = resolve_keys(ctx, data, names, keymap)
-    _reject_multikey(ctx, data, names, keys)
+    _check_keys(ctx, data, names, keys)
     return TypedDictExe(ctx, field_types, [k[0] for k in keys])
 
 

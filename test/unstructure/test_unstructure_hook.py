@@ -1208,6 +1208,74 @@ def test_unstructure_default_keymap_rejects_invalid_values(testregister):
             unstructure(Foo, Foo(1))
 
 
+def test_unstructure_default_keymap_rejects_duplicate_keys(testregister):
+    @dataclass
+    class Foo:
+        a: int
+        b: int
+
+    class Bar(TypedDict):
+        a: int
+        b: int
+
+    keymap = {"a": "x", "b": "x"}
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Foo], data: Foo) -> dict:
+        return unstructure_default(ctx, data, keymap)
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Bar], data: dict) -> dict:
+        return unstructure_default(ctx, data, keymap)
+
+    with ctxure_config(testregister):
+        with pytest.raises(ValidationError, match="keymap maps 'a' and 'b' to the same key 'x'") as e:
+            unstructure(Foo, Foo(1, 2))
+        assert e.value.ctx.structured_type is Foo
+
+        with pytest.raises(ValidationError, match="keymap maps 'a' and 'b' to the same key 'x'") as e:
+            unstructure(Bar, {"a": 1, "b": 2})
+        assert e.value.ctx.structured_type is Bar
+
+
+@pytest.mark.parametrize(
+    "keymap",
+    [
+        {"a": "b"},  # `a` is written to "b", and so is the unmapped `b`
+        {"a": KeyPath("x"), "b": "x"},  # a single-key KeyPath is the same key as a str
+    ],
+)
+def test_unstructure_default_keymap_rejects_colliding_keys(testregister, keymap):
+    @dataclass
+    class Foo:
+        a: int
+        b: int
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Foo], data: Foo) -> dict:
+        return unstructure_default(ctx, data, keymap)
+
+    with ctxure_config(testregister):
+        with pytest.raises(ValidationError, match="keymap maps 'a' and 'b' to the same key"):
+            unstructure(Foo, Foo(1, 2))
+
+
+def test_unstructure_default_keymap_ignores_duplicates_for_other_fields(testregister):
+    @dataclass
+    class Foo:
+        a: int
+        b: int
+
+    keymap = {"a": "A", "other1": "x", "other2": "x"}
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Foo], data: Foo) -> dict:
+        return unstructure_default(ctx, data, keymap)
+
+    with ctxure_config(testregister):
+        assert unstructure(Foo, Foo(1, 2)) == {"A": 1, "b": 2}
+
+
 def test_unstructure_default_typeddict_with_keymap(testregister):
     class Foo(TypedDict):
         a: int
