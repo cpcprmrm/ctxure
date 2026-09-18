@@ -39,6 +39,7 @@ from .error import (
 from .error import (
     ValidationError as ValidationError,
 )
+from .keypath import KeyPath as KeyPath
 from .multidispatch import DataClassBase as DataClassBase
 from .multidispatch import TypedDictBase as TypedDictBase
 from .structure import (
@@ -80,6 +81,7 @@ __all__ = [
     "DataClassBase",
     "TypedDictBase",
     "ExtraFields",
+    "KeyPath",
     "LocationParseError",
     "MissingFields",
     "MultipleStructureHooks",

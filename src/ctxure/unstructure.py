@@ -1,7 +1,7 @@
 import base64
 import typing
 from collections.abc import Hashable, Sequence
-from dataclasses import fields, is_dataclass
+from dataclasses import Field, fields, is_dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
@@ -15,6 +15,7 @@ from typing_extensions import is_typeddict
 
 from ctxure import config
 from ctxure._exetree import Exe, HookExe, Site, mark_not_bypass_safe
+from ctxure._keymap import Keymap, KeyTuple, resolve_keys
 from ctxure._location import KeySeg, format_field
 from ctxure._typeutil import (
     get_typeddict_extras_policy,
@@ -35,6 +36,7 @@ from ctxure.error import (
     ReentranceError,
     ValidationError,
 )
+from ctxure.keypath import KeyPath
 from ctxure.multidispatch import (
     DataClassBase,
     LiteralBase,
@@ -116,7 +118,7 @@ _MAX_KEYMAP_CACHE_ENTRY = 16
 
 
 @typing.no_type_check
-def unstructure_default(ctx: CtxImpl, data: Any, keymap: dict[str, str] | None = None) -> Any:
+def unstructure_default(ctx: CtxImpl, data: Any, keymap: Keymap | None = None) -> Any:
     exe_holder = ctx._site.exe
     dtype = ctx._site.dtype(data)
     if exe_holder.default_exe is not None and exe_holder.default_dtype == dtype and exe_holder.keymap is keymap:
@@ -169,9 +171,7 @@ def _unstructure_exe(ctx: Any, data: Any) -> Exe:
 
 
 @register
-def _unstructure_default(
-    ctx: CtxImpl[NoneType, Any, Any, Any], data: NoneType, *, keymap: dict[str, str] | None
-) -> Exe:
+def _unstructure_default(ctx: CtxImpl[NoneType, Any, Any, Any], data: NoneType, *, keymap: Keymap | None) -> Exe:
     return none_exe
 
 
@@ -180,7 +180,7 @@ def none_exe(ctx: CtxImpl[NoneType, Any, Any, Any], data: None) -> None:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[int, Any, Any, Any], data: int, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[int, Any, Any, Any], data: int, *, keymap: Keymap | None) -> Exe:
     return int_exe
 
 
@@ -189,12 +189,12 @@ def int_exe(ctx: CtxImpl[int, Any, Any, Any], data: int) -> int:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[bool, Any, Any, Any], data: bool, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[bool, Any, Any, Any], data: bool, *, keymap: Keymap | None) -> Exe:
     return bool_exe
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[bool, Any, Any, Any], data: int, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[bool, Any, Any, Any], data: int, *, keymap: Keymap | None) -> Exe:
     return bool_from_int_exe
 
 
@@ -207,7 +207,7 @@ def bool_from_int_exe(ctx: CtxImpl[bool, Any, Any, Any], data: int) -> bool:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[float, Any, Any, Any], data: float, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[float, Any, Any, Any], data: float, *, keymap: Keymap | None) -> Exe:
     return float_exe
 
 
@@ -216,7 +216,7 @@ def float_exe(ctx: CtxImpl[float, Any, Any, Any], data: float) -> float:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[str, Any, Any, Any], data: str, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[str, Any, Any, Any], data: str, *, keymap: Keymap | None) -> Exe:
     return str_exe
 
 
@@ -225,7 +225,7 @@ def str_exe(ctx: CtxImpl[str, Any, Any, Any], data: str) -> str:
 
 
 @register.ctx_subtypes
-def _unstructure_default(ctx: CtxImpl[Enum, Any, Any, Any], data: Enum, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Enum, Any, Any, Any], data: Enum, *, keymap: Keymap | None) -> Exe:
     return enum_exe
 
 
@@ -235,7 +235,7 @@ def enum_exe(ctx: CtxImpl[Enum, Any, Any, Any], data: Enum) -> Any:
 
 @register.ctx_subtypes
 def _unstructure_default(
-    ctx: CtxImpl[Enum, Any, Any, tuple[Any, KeySeg[Any]]], data: Any, *, keymap: dict[str, str] | None
+    ctx: CtxImpl[Enum, Any, Any, tuple[Any, KeySeg[Any]]], data: Any, *, keymap: Keymap | None
 ) -> Exe:
     return enum_key_exe
 
@@ -245,7 +245,7 @@ def enum_key_exe(ctx: CtxImpl[Enum, Any, Any, Any], data: Any) -> str:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[Path, Any, Any, Any], data: Path, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Path, Any, Any, Any], data: Path, *, keymap: Keymap | None) -> Exe:
     return path_exe
 
 
@@ -254,7 +254,7 @@ def path_exe(ctx: CtxImpl[Path, Any, Any, Any], data: Path) -> str:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[UUID, Any, Any, Any], data: UUID, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[UUID, Any, Any, Any], data: UUID, *, keymap: Keymap | None) -> Exe:
     return uuid_exe
 
 
@@ -263,7 +263,7 @@ def uuid_exe(ctx: CtxImpl[UUID, Any, Any, Any], data: UUID) -> str:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[Decimal, Any, Any, Any], data: Decimal, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Decimal, Any, Any, Any], data: Decimal, *, keymap: Keymap | None) -> Exe:
     return decimal_exe
 
 
@@ -272,7 +272,7 @@ def decimal_exe(ctx: CtxImpl[Decimal, Any, Any, Any], data: Decimal) -> str:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[bytes, Any, Any, Any], data: bytes, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[bytes, Any, Any, Any], data: bytes, *, keymap: Keymap | None) -> Exe:
     return bytes_exe
 
 
@@ -281,7 +281,7 @@ def bytes_exe(ctx: CtxImpl[bytes, Any, Any, Any], data: bytes) -> str:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[date, Any, Any, Any], data: date, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[date, Any, Any, Any], data: date, *, keymap: Keymap | None) -> Exe:
     return date_exe
 
 
@@ -290,9 +290,7 @@ def date_exe(ctx: CtxImpl[date, Any, Any, Any], data: date) -> str:
 
 
 @register
-def _unstructure_default(
-    ctx: CtxImpl[datetime, Any, Any, Any], data: datetime, *, keymap: dict[str, str] | None
-) -> Exe:
+def _unstructure_default(ctx: CtxImpl[datetime, Any, Any, Any], data: datetime, *, keymap: Keymap | None) -> Exe:
     return datetime_exe
 
 
@@ -304,9 +302,7 @@ _primitive_types = int | float | bool | str | None
 
 
 @register
-def _unstructure_default(
-    ctx: CtxImpl[Any, Any, Any, Any], data: _primitive_types, *, keymap: dict[str, str] | None
-) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: _primitive_types, *, keymap: Keymap | None) -> Exe:
     return any_primitive_exe
 
 
@@ -318,7 +314,7 @@ def any_primitive_exe(ctx: CtxImpl[Any, Any, Any, Any], data: _primitive_types) 
 
 @register
 def _unstructure_default(
-    ctx: CtxImpl[Any, Any, Any, Any], data: Path | UUID | Decimal, *, keymap: dict[str, str] | None
+    ctx: CtxImpl[Any, Any, Any, Any], data: Path | UUID | Decimal, *, keymap: Keymap | None
 ) -> Exe:
     return any_str_convertible_exe
 
@@ -330,7 +326,7 @@ def any_str_convertible_exe(ctx: CtxImpl[Any, Any, Any, Any], data: Path | UUID 
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: bytes, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: bytes, *, keymap: Keymap | None) -> Exe:
     return any_bytes_exe
 
 
@@ -341,9 +337,7 @@ def any_bytes_exe(ctx: CtxImpl[Any, Any, Any, Any], data: bytes) -> str:
 
 
 @register
-def _unstructure_default(
-    ctx: CtxImpl[Any, Any, Any, Any], data: date | datetime, *, keymap: dict[str, str] | None
-) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: date | datetime, *, keymap: Keymap | None) -> Exe:
     return any_date_exe
 
 
@@ -354,19 +348,17 @@ def any_date_exe(ctx: CtxImpl[Any, Any, Any, Any], data: date | datetime) -> str
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[list, Any, Any, Any], data: list, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[list, Any, Any, Any], data: list, *, keymap: Keymap | None) -> Exe:
     return ListExe(ctx)
 
 
 @register
-def _unstructure_default(
-    ctx: CtxImpl[Sequence, Any, Any, Any], data: Sequence, *, keymap: dict[str, str] | None
-) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Sequence, Any, Any, Any], data: Sequence, *, keymap: Keymap | None) -> Exe:
     return SequenceExe(ctx)
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: list, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: list, *, keymap: Keymap | None) -> Exe:
     return AnyListExe(ctx)
 
 
@@ -469,7 +461,7 @@ class AnyListExe:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[tuple, Any, Any, Any], data: tuple, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[tuple, Any, Any, Any], data: tuple, *, keymap: Keymap | None) -> Exe:
     type_params = get_args(ctx.structured_type)
     if get_origin(ctx.structured_type) is tuple and not type_params:
         return InhomogeneousTupleExe(ctx, ())
@@ -482,7 +474,7 @@ def _unstructure_default(ctx: CtxImpl[tuple, Any, Any, Any], data: tuple, *, key
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: tuple, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: tuple, *, keymap: Keymap | None) -> Exe:
     return AnyTupleExe(ctx)
 
 
@@ -579,12 +571,12 @@ class AnyTupleExe:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[set, Any, Any, Any], data: set, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[set, Any, Any, Any], data: set, *, keymap: Keymap | None) -> Exe:
     return SetExe(ctx)
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: set, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: set, *, keymap: Keymap | None) -> Exe:
     return AnySetExe(ctx)
 
 
@@ -655,14 +647,12 @@ class AnySetExe:
 
 
 @register
-def _unstructure_default(
-    ctx: CtxImpl[frozenset, Any, Any, Any], data: frozenset, *, keymap: dict[str, str] | None
-) -> Exe:
+def _unstructure_default(ctx: CtxImpl[frozenset, Any, Any, Any], data: frozenset, *, keymap: Keymap | None) -> Exe:
     return FrozenSetExe(ctx)
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: frozenset, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: frozenset, *, keymap: Keymap | None) -> Exe:
     return AnyFrozenSetExe(ctx)
 
 
@@ -733,12 +723,12 @@ class AnyFrozenSetExe:
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[dict, Any, Any, Any], data: dict, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[dict, Any, Any, Any], data: dict, *, keymap: Keymap | None) -> Exe:
     return DictExe(ctx)
 
 
 @register
-def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: dict, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: dict, *, keymap: Keymap | None) -> Exe:
     return AnyDictExe(ctx)
 
 
@@ -853,7 +843,7 @@ def _unstructure_val_site(
 
 @register
 def _unstructure_default(
-    ctx: CtxImpl[int, Any, Any, tuple[Any, KeySeg[Any]]], data: int | str, *, keymap: dict[str, str] | None
+    ctx: CtxImpl[int, Any, Any, tuple[Any, KeySeg[Any]]], data: int | str, *, keymap: Keymap | None
 ) -> Exe:
     return int_key_exe
 
@@ -864,15 +854,27 @@ def int_key_exe(ctx: CtxImpl[int, Any, Any, Any], data: int) -> str:
 
 @register.ctx_subtypes
 def _unstructure_default(
-    ctx: CtxImpl[DataClassBase, Any, Any, Any], data: DataClassBase, *, keymap: dict[str, str] | None
+    ctx: CtxImpl[DataClassBase, Any, Any, Any], data: DataClassBase, *, keymap: Keymap | None
 ) -> Exe:
-    return DataClassExe(ctx, keymap)
+    field_types = resolve_field_types(ctx.structured_type)
+    names = [f.name for f, _ in field_types]
+    keys = resolve_keys(ctx, data, names, keymap)
+    _reject_multikey(ctx, data, names, keys)
+    return DataClassExe(ctx, field_types, [k[0] for k in keys])
+
+
+def _reject_multikey(ctx: CtxImpl, data: Any, names: list[str], keys: list[KeyTuple]) -> None:
+    for name, k in zip(names, keys):
+        if len(k) > 1:
+            raise ValidationError(
+                ctx,
+                data,
+                f"KeyPath with multiple keys is not supported by unstructure_default: {name!r} -> {KeyPath(*k)!r}",
+            )
 
 
 @register
-def _unstructure_default(
-    ctx: CtxImpl[Any, Any, Any, Any], data: DataClassBase, *, keymap: dict[str, str] | None
-) -> Exe:
+def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: DataClassBase, *, keymap: Keymap | None) -> Exe:
     return AnyDataClassExe(ctx)
 
 
@@ -882,13 +884,12 @@ class DataClassExe:
     children: list[tuple[str, str, Site]]  # field_name, alias, site
     dataclass_type: Any
 
-    def __init__(self, ctx: CtxImpl, keymap: dict[str, str] | None):
+    def __init__(self, ctx: CtxImpl, field_types: list[tuple[Field, Any]], aliases: list[str]):
         self.dataclass_type = ctx.structured_type
-        field_types = resolve_field_types(ctx.structured_type)
         self.children = [
             (
                 f.name,
-                alias := keymap[f.name] if keymap and f.name in keymap else f.name,
+                alias,
                 _unstructure_site(
                     CtxImpl.create(
                         ctx,
@@ -899,7 +900,7 @@ class DataClassExe:
                     )
                 ),
             )
-            for f, t in field_types
+            for (f, t), alias in zip(field_types, aliases)
         ]
 
     def __call__(self, ctx: CtxImpl, data: Any) -> dict[str, Any]:
@@ -949,10 +950,12 @@ class AnyDataClassExe:
 
 
 @register.ctx_subtypes
-def _unstructure_default(
-    ctx: CtxImpl[TypedDictBase, Any, Any, Any], data: dict, *, keymap: dict[str, str] | None
-) -> Exe:
-    return TypedDictExe(ctx, keymap)
+def _unstructure_default(ctx: CtxImpl[TypedDictBase, Any, Any, Any], data: dict, *, keymap: Keymap | None) -> Exe:
+    field_types = resolve_typeddict_field_types(ctx.structured_type)
+    names = [name for name, _ in field_types]
+    keys = resolve_keys(ctx, data, names, keymap)
+    _reject_multikey(ctx, data, names, keys)
+    return TypedDictExe(ctx, field_types, [k[0] for k in keys])
 
 
 class TypedDictExe:
@@ -974,13 +977,12 @@ class TypedDictExe:
     extra_items_type: Any
     extra_children: dict[str, Site]
 
-    def __init__(self, ctx: CtxImpl, keymap: dict[str, str] | None):
+    def __init__(self, ctx: CtxImpl, field_types: list[tuple[str, Any]], aliases: list[str]):
         self.typeddict_type = ctx.structured_type
-        field_types = resolve_typeddict_field_types(ctx.structured_type)
         self.children = [
             (
                 name,
-                alias := keymap[name] if keymap and name in keymap else name,
+                alias,
                 _unstructure_site(
                     CtxImpl.create(
                         ctx,
@@ -991,7 +993,7 @@ class TypedDictExe:
                     )
                 ),
             )
-            for name, t in field_types
+            for (name, t), alias in zip(field_types, aliases)
         ]
         self.declared_keys = frozenset(name for name, _ in field_types)
         self.output_keys = frozenset(alias for _, alias, _ in self.children)
@@ -1034,7 +1036,7 @@ LiteralValueType = int | float | bool | str | bytes | Enum | NoneType
 
 @register.ctx_subtypes
 def _unstructure_default(
-    ctx: CtxImpl[LiteralBase, Any, Any, Any], data: LiteralValueType, *, keymap: dict[str, str] | None
+    ctx: CtxImpl[LiteralBase, Any, Any, Any], data: LiteralValueType, *, keymap: Keymap | None
 ) -> Exe:
     if isinstance(data, bool):
         return bool_exe
@@ -1058,7 +1060,7 @@ def _unstructure_default(
     ctx: CtxImpl[LiteralBase, Any, Any, tuple[Any, KeySeg[Any]]],
     data: LiteralValueType,
     *,
-    keymap: dict[str, str] | None,
+    keymap: Keymap | None,
 ) -> Exe:
     return literal_key_exe
 
@@ -1089,7 +1091,7 @@ def literal_key_exe(ctx: CtxImpl[LiteralBase, Any, Any, Any], data: LiteralValue
 
 
 @register.ctx_subtypes
-def _unstructure_default(ctx: CtxImpl[NewTypeBase, Any, Any, Any], data: Any, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[NewTypeBase, Any, Any, Any], data: Any, *, keymap: Keymap | None) -> Exe:
     supertype = ctx.structured_type.__supertype__
     try:
         return _unstructure_default(ctx._replace_type(supertype), data, keymap=None)
@@ -1098,7 +1100,7 @@ def _unstructure_default(ctx: CtxImpl[NewTypeBase, Any, Any, Any], data: Any, *,
 
 
 @register.ctx_subtypes
-def _unstructure_default(ctx: CtxImpl[UnionBase, Any, Any, Any], data: Any, *, keymap: dict[str, str] | None) -> Exe:
+def _unstructure_default(ctx: CtxImpl[UnionBase, Any, Any, Any], data: Any, *, keymap: Keymap | None) -> Exe:
     if keymap is not None:
         raise ValidationError(ctx, data, "keymap is not supported for union default conversion")
     dispatch = config._dispatcher.get().dispatch

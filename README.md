@@ -324,7 +324,7 @@ You may be tempted to write `data: list[str]` instead of `data: list[Any]`. Howe
 ### Renamed fields
 
 Sometimes the fields of a target dataclass (or `TypedDict`) and the keys of the input data do not match. One option is to call `structure_default` with a modified copy of `data` inside a hook, but that can be inefficient.
-`structure_default` and `unstructure_default` accept an optional `keymap: dict[str, str]` argument. `keymap` maps structured keys (field names) to unstructured keys (`dict` keys). For any field not in `keymap`, the input `data` must use the field name as its key.
+`structure_default` and `unstructure_default` accept an optional `keymap: dict[str, str | KeyPath]` argument (any `Mapping` works). `keymap` maps structured keys (field names) to unstructured keys (`dict` keys). For any field not in `keymap`, the input `data` must use the field name as its key. A `KeyPath` value reads from a nested location instead; see [Nested keys](#nested-keys).
 
 It is strongly recommended to define `keymap` as a module-level constant. Defining it as a local variable creates a new `dict` on every call — wasteful on its own, and it also defeats Ctxure's internal cache.
 
@@ -360,6 +360,41 @@ structured = structure(EmployeeRegistry, records)
 unstructure(EmployeeRegistry, structured)
 # == records
 ```
+
+### Nested keys
+
+Input data often wraps the values a model needs in nested objects. A `KeyPath` value in `keymap` reads a field from a nested location relative to the current `data`, without copying or reshaping the input.
+
+```python
+# This example is independent of the previous ones. So we import all necessary names here.
+from ctxure import Ctx, KeyPath, register, structure, structure_default
+from dataclasses import dataclass
+
+@dataclass
+class Order:
+    order_id: str
+    customer: str
+    total: float
+
+keymap = {"customer": KeyPath("buyer", "email"), "total": KeyPath("payment", "amount")}
+
+@register
+def structure_hook(ctx: Ctx[Order], data: dict) -> Order:
+    return structure_default(ctx, data, keymap=keymap)
+
+structure(Order, {
+    "order_id": "A-1001",
+    "buyer": {"email": "kim@example.com", "tier": "gold"},
+    "payment": {"amount": 42.5, "currency": "EUR"},
+})
+# Order(order_id='A-1001', customer='kim@example.com', total=42.5)
+```
+
+Each argument of `KeyPath` is one literal `dict` key, so no escaping is needed: `KeyPath("user.name")` is the single key `"user.name"`. A missing key at any depth is treated like a missing field, and a value on the way that is not a `dict` (including `None`) raises `ValidationError`. Several fields may read overlapping locations.
+
+Extra keys are checked only at the current level. Here `"buyer"` and `"payment"` count as used, and the keys inside them that no field reads, such as `"tier"` and `"currency"`, are ignored. Note that `KeyPath` refers to the unstructured data, while [path expressions](#path-expression) in `Ctx` refer to the structured data. So hooks registered for a field's path, such as `"$.customer"`, still fire.
+
+`unstructure_default` does not support multi-key `KeyPath`s yet and raises `ValidationError` for them.
 
 ### Injecting extra data
 
@@ -831,7 +866,7 @@ Utility to call default handlers or other hooks manually.
 
 Call the default handler, bypassing any hook. Note that hooks are not bypassed for fields or elements of `data`. See [Pre- and post-validation](#pre--and-post-validation) for an example.
 
-`keymap: dict[str, str]` is used to map field names to dict keys for dataclasses or `TypedDict`. `keymap` can contain only renamed fields. `keymap=None` means that all field names are identical to the dict keys. For `structure_default`, the input `dict` must use the mapped key. For `unstructure_default`, the output dict carries the mapped key. In either case, the original field name is not used. `keymap` should be defined as a module-level constant and not be mutated. A local variable creates a new dict object on every call, defeating the internal cache. `keymap` is used only for structuring or unstructuring dataclasses and `TypedDict`s. For other non-union types, it is ignored. Passing `keymap` to default conversion for a union raises `ValidationError`; register a hook for the concrete member type instead. See [Renamed fields](#renamed-fields) for an example.
+`keymap: dict[str, str | KeyPath]` is used to map field names to dict keys for dataclasses or `TypedDict`. A `str` value is one dict key. A `KeyPath` value is a nested location, relative to `data`; `structure_default` supports it, while `unstructure_default` supports only single-key `KeyPath`s for now (see [Nested keys](#nested-keys)). Any other value type for a field of the target raises `ValidationError`. `keymap` can contain only renamed fields. `keymap=None` means that all field names are identical to the dict keys. For `structure_default`, the input `dict` must use the mapped key. For `unstructure_default`, the output dict carries the mapped key. In either case, the original field name is not used. `keymap` should be defined as a module-level constant and not be mutated. A local variable creates a new dict object on every call, defeating the internal cache. `keymap` is used only for structuring or unstructuring dataclasses and `TypedDict`s. For other non-union types, it is ignored. Passing `keymap` to default conversion for a union raises `ValidationError`; register a hook for the concrete member type instead. See [Renamed fields](#renamed-fields) for an example.
 
 **structure_by_type(ctx, data) / unstructure_by_type(ctx, data)**:
 

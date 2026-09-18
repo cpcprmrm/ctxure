@@ -9,6 +9,7 @@ from typing_extensions import TypedDict as ExtTypedDict
 from ctxure import (
     AmbiguousUnion,
     Ctx,
+    KeyPath,
     MultipleUnstructureHooks,
     NoUnstructureHook,
     Of,
@@ -1115,6 +1116,96 @@ def test_unstructure_default_union_with_keymap_is_not_supported(testregister):
         with pytest.raises(ValidationError, match="keymap is not supported") as e:
             unstructure(Foo | Bar, Foo(1))
         assert e.value.ctx.structured_type == Foo | Bar
+
+
+def test_unstructure_default_single_key_keypath_is_plain_alias(testregister):
+    @dataclass
+    class Foo:
+        a: int
+        b: int
+
+    class Bar(TypedDict):
+        a: int
+        b: int
+
+    keymap = {"b": KeyPath("B")}
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Foo], data: Foo) -> dict:
+        return unstructure_default(ctx, data, keymap)
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Bar], data: dict) -> dict:
+        return unstructure_default(ctx, data, keymap)
+
+    with ctxure_config(testregister):
+        assert unstructure(Foo, Foo(1, 2)) == {"a": 1, "B": 2}
+        assert unstructure(Bar, {"a": 1, "b": 2}) == {"a": 1, "B": 2}
+
+
+def test_unstructure_default_multikey_keypath_is_not_supported(testregister):
+    @dataclass
+    class Foo:
+        a: int
+        b: int
+
+    class Bar(TypedDict):
+        a: int
+        b: int
+
+    keymap = {"b": KeyPath("x", "b")}
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Foo], data: Foo) -> dict:
+        return unstructure_default(ctx, data, keymap)
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Bar], data: dict) -> dict:
+        return unstructure_default(ctx, data, keymap)
+
+    with ctxure_config(testregister):
+        with pytest.raises(
+            ValidationError, match=r"not supported by unstructure_default: 'b' -> KeyPath\('x', 'b'\)"
+        ) as e:
+            unstructure(Foo, Foo(1, 2))
+        assert e.value.ctx.structured_type is Foo
+
+        with pytest.raises(
+            ValidationError, match=r"not supported by unstructure_default: 'b' -> KeyPath\('x', 'b'\)"
+        ) as e:
+            unstructure(Bar, {"a": 1, "b": 2})
+        assert e.value.ctx.structured_type is Bar
+
+
+def test_unstructure_default_ignores_multikey_keypath_for_other_fields(testregister):
+    @dataclass
+    class Foo:
+        a: int
+
+    keymap = {"a": "A", "other": KeyPath("x", "y")}
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Foo], data: Foo) -> dict:
+        return unstructure_default(ctx, data, keymap)
+
+    with ctxure_config(testregister):
+        assert unstructure(Foo, Foo(1)) == {"A": 1}
+
+
+def test_unstructure_default_keymap_rejects_invalid_values(testregister):
+    @dataclass
+    class Foo:
+        a: int
+
+    keymap = {"a": ("x", "a")}
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[Foo], data: Foo) -> dict:
+        return unstructure_default(ctx, data, keymap)  # type: ignore[arg-type]
+
+    with ctxure_config(testregister):
+        with pytest.raises(ValidationError, match="keymap value for 'a' must be str or KeyPath"):
+            unstructure(Foo, Foo(1))
 
 
 def test_unstructure_default_typeddict_with_keymap(testregister):

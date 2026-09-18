@@ -3,7 +3,7 @@ import binascii
 import typing
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Collection, Hashable, Sequence
-from dataclasses import MISSING, is_dataclass
+from dataclasses import MISSING, Field, is_dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from enum import Enum
@@ -16,6 +16,7 @@ from typing_extensions import is_typeddict
 
 from ctxure import config
 from ctxure._exetree import Exe, HookExe, Site, mark_not_bypass_safe
+from ctxure._keymap import Keymap, KeyTuple, format_keys, keys_path, needs_path_exe, resolve_keys
 from ctxure._location import KeySeg, format_field
 from ctxure._typeutil import (
     get_typeddict_extras_policy,
@@ -119,7 +120,7 @@ _MAX_KEYMAP_CACHE_ENTRY = 16
 
 
 @typing.no_type_check
-def structure_default(ctx: CtxImpl, data: Any, keymap: dict[str, str] | None = None) -> Any:
+def structure_default(ctx: CtxImpl, data: Any, keymap: Keymap | None = None) -> Any:
     exe_holder = ctx._site.exe
     dtype = ctx._site.dtype(data)
     if exe_holder.default_exe is not None and exe_holder.default_dtype == dtype and exe_holder.keymap is keymap:
@@ -171,7 +172,7 @@ def _structure_exe(ctx: Any, data: Any) -> Exe:
 
 
 @register
-def _structure_default(ctx: CtxImpl[Any, Any, Any, Any], data: Any, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[Any, Any, Any, Any], data: Any, *, keymap: Keymap | None) -> Exe:
     if ctx.structured_type is Any:
         return any_exe
     raise NoStructureHook(ctx, data)
@@ -182,7 +183,7 @@ def any_exe(ctx: CtxImpl[Any, Any, Any, Any], data: Any) -> Any:
 
 
 @register
-def _structure_default(ctx: CtxImpl[NoneType, Any, Any, Any], data: NoneType, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[NoneType, Any, Any, Any], data: NoneType, *, keymap: Keymap | None) -> Exe:
     return none_exe
 
 
@@ -191,7 +192,7 @@ def none_exe(ctx: CtxImpl[NoneType, Any, Any, Any], data: None) -> None:
 
 
 @register
-def _structure_default(ctx: CtxImpl[int, Any, Any, Any], data: int, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[int, Any, Any, Any], data: int, *, keymap: Keymap | None) -> Exe:
     return int_exe
 
 
@@ -200,7 +201,7 @@ def int_exe(ctx: CtxImpl[int, Any, Any, Any], data: int) -> int:
 
 
 @register
-def _structure_default(ctx: CtxImpl[bool, Any, Any, Any], data: int, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[bool, Any, Any, Any], data: int, *, keymap: Keymap | None) -> Exe:
     return bool_exe
 
 
@@ -209,7 +210,7 @@ def bool_exe(ctx: CtxImpl[bool, Any, Any, Any], data: int) -> bool:
 
 
 @register
-def _structure_default(ctx: CtxImpl[float, Any, Any, Any], data: float, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[float, Any, Any, Any], data: float, *, keymap: Keymap | None) -> Exe:
     return float_exe
 
 
@@ -218,7 +219,7 @@ def float_exe(ctx: CtxImpl[float, Any, Any, Any], data: float) -> float:
 
 
 @register
-def _structure_default(ctx: CtxImpl[str, Any, Any, Any], data: str, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[str, Any, Any, Any], data: str, *, keymap: Keymap | None) -> Exe:
     return str_exe
 
 
@@ -227,7 +228,7 @@ def str_exe(ctx: CtxImpl[str, Any, Any, Any], data: str) -> str:
 
 
 @register.ctx_subtypes
-def _structure_default(ctx: CtxImpl[Enum, Any, Any, Any], data: Any, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[Enum, Any, Any, Any], data: Any, *, keymap: Keymap | None) -> Exe:
     return enum_exe
 
 
@@ -239,7 +240,7 @@ def enum_exe(ctx: CtxImpl[Enum, Any, Any, Any], data: Any) -> Enum:
 
 
 @register
-def _structure_default(ctx: CtxImpl[Path, Any, Any, Any], data: str, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[Path, Any, Any, Any], data: str, *, keymap: Keymap | None) -> Exe:
     return path_exe
 
 
@@ -248,7 +249,7 @@ def path_exe(ctx: CtxImpl[Path, Any, Any, Any], data: str) -> Path:
 
 
 @register
-def _structure_default(ctx: CtxImpl[UUID, Any, Any, Any], data: str, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[UUID, Any, Any, Any], data: str, *, keymap: Keymap | None) -> Exe:
     return uuid_exe
 
 
@@ -260,7 +261,7 @@ def uuid_exe(ctx: CtxImpl[UUID, Any, Any, Any], data: str) -> UUID:
 
 
 @register
-def _structure_default(ctx: CtxImpl[Decimal, Any, Any, Any], data: str, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[Decimal, Any, Any, Any], data: str, *, keymap: Keymap | None) -> Exe:
     return decimal_exe
 
 
@@ -272,7 +273,7 @@ def decimal_exe(ctx: CtxImpl[Decimal, Any, Any, Any], data: str) -> Decimal:
 
 
 @register
-def _structure_default(ctx: CtxImpl[bytes, Any, Any, Any], data: str, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[bytes, Any, Any, Any], data: str, *, keymap: Keymap | None) -> Exe:
     return bytes_exe
 
 
@@ -284,7 +285,7 @@ def bytes_exe(ctx: CtxImpl[bytes, Any, Any, Any], data: str) -> bytes:
 
 
 @register
-def _structure_default(ctx: CtxImpl[date, Any, Any, Any], data: str, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[date, Any, Any, Any], data: str, *, keymap: Keymap | None) -> Exe:
     return date_exe
 
 
@@ -296,7 +297,7 @@ def date_exe(ctx: CtxImpl[date, Any, Any, Any], data: str) -> date:
 
 
 @register
-def _structure_default(ctx: CtxImpl[datetime, Any, Any, Any], data: str, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[datetime, Any, Any, Any], data: str, *, keymap: Keymap | None) -> Exe:
     return datetime_exe
 
 
@@ -349,22 +350,20 @@ UnaryTypeCollection = list | tuple | set | frozenset
 
 
 @register
+def _structure_default(ctx: CtxImpl[list, Any, Any, Any], data: UnaryTypeCollection, *, keymap: Keymap | None) -> Exe:
+    return _structure_default_list(ctx, data)
+
+
+@register
 def _structure_default(
-    ctx: CtxImpl[list, Any, Any, Any], data: UnaryTypeCollection, *, keymap: dict[str, str] | None
+    ctx: CtxImpl[Sequence, Any, Any, Any], data: UnaryTypeCollection, *, keymap: Keymap | None
 ) -> Exe:
     return _structure_default_list(ctx, data)
 
 
 @register
 def _structure_default(
-    ctx: CtxImpl[Sequence, Any, Any, Any], data: UnaryTypeCollection, *, keymap: dict[str, str] | None
-) -> Exe:
-    return _structure_default_list(ctx, data)
-
-
-@register
-def _structure_default(
-    ctx: CtxImpl[Collection, Any, Any, Any], data: UnaryTypeCollection, *, keymap: dict[str, str] | None
+    ctx: CtxImpl[Collection, Any, Any, Any], data: UnaryTypeCollection, *, keymap: Keymap | None
 ) -> Exe:
     return _structure_default_list(ctx, data)
 
@@ -382,9 +381,7 @@ class ListExe(SingleParamCollectionExe):
 
 
 @register
-def _structure_default(
-    ctx: CtxImpl[tuple, Any, Any, Any], data: UnaryTypeCollection, *, keymap: dict[str, str] | None
-) -> Exe:
+def _structure_default(ctx: CtxImpl[tuple, Any, Any, Any], data: UnaryTypeCollection, *, keymap: Keymap | None) -> Exe:
     type_params = get_args(ctx.structured_type)
     if get_origin(ctx.structured_type) is tuple and not type_params:
         return InhomogeneousTupleExe(ctx, isinstance(data, Sequence))
@@ -434,9 +431,7 @@ class InhomogeneousTupleExe:
 
 
 @register
-def _structure_default(
-    ctx: CtxImpl[set, Any, Any, Any], data: UnaryTypeCollection, *, keymap: dict[str, str] | None
-) -> Exe:
+def _structure_default(ctx: CtxImpl[set, Any, Any, Any], data: UnaryTypeCollection, *, keymap: Keymap | None) -> Exe:
     return SetExe(ctx, isinstance(data, Sequence))
 
 
@@ -450,7 +445,7 @@ class SetExe(SingleParamCollectionExe):
 
 @register
 def _structure_default(
-    ctx: CtxImpl[frozenset, Any, Any, Any], data: UnaryTypeCollection, *, keymap: dict[str, str] | None
+    ctx: CtxImpl[frozenset, Any, Any, Any], data: UnaryTypeCollection, *, keymap: Keymap | None
 ) -> Exe:
     return FrozenSetExe(ctx, isinstance(data, Sequence))
 
@@ -464,7 +459,7 @@ class FrozenSetExe(SingleParamCollectionExe):
 
 
 @register
-def _structure_default(ctx: CtxImpl[dict, Any, Any, Any], data: dict, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[dict, Any, Any, Any], data: dict, *, keymap: Keymap | None) -> Exe:
     return DictExe(ctx)
 
 
@@ -539,7 +534,7 @@ class DictExe:
 
 @register
 def _structure_default(
-    ctx: CtxImpl[int, Any, Any, tuple[Any, KeySeg[Any]]], data: int | str, *, keymap: dict[str, str] | None
+    ctx: CtxImpl[int, Any, Any, tuple[Any, KeySeg[Any]]], data: int | str, *, keymap: Keymap | None
 ) -> Exe:
     return int_key_exe
 
@@ -552,11 +547,15 @@ def int_key_exe(ctx: CtxImpl[int, Any, Any, tuple[Any, KeySeg[Any]]], data: int 
 
 
 @register.ctx_subtypes
-def _structure_default(ctx: CtxImpl[DataClassBase, Any, Any, Any], data: dict, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[DataClassBase, Any, Any, Any], data: dict, *, keymap: Keymap | None) -> Exe:
     origin = get_origin(ctx.structured_type) or ctx.structured_type
     if not origin.__dataclass_params__.init:
         raise NoStructureHook(ctx, data)
-    return DataClassExe(ctx, keymap)
+    field_types = resolve_input_field_types(ctx.structured_type)
+    keys = resolve_keys(ctx, data, (f.name for f, _ in field_types), keymap)
+    if needs_path_exe(keys):
+        return DataClassPathExe(ctx, field_types, keys)
+    return DataClassExe(ctx, field_types, [k[0] for k in keys])
 
 
 class DataClassExe:
@@ -566,14 +565,18 @@ class DataClassExe:
     dataclass_type: Any
     missing_sentinel: object
 
-    def __init__(self, ctx: CtxImpl[DataClassBase, Any, Any, Any], keymap: dict[str, str] | None):
+    def __init__(
+        self,
+        ctx: CtxImpl[DataClassBase, Any, Any, Any],
+        field_types: list[tuple[Field, Any]],
+        aliases: list[str],
+    ):
         self.dataclass_type = ctx.structured_type
         self.missing_sentinel = object()
-        field_types = resolve_input_field_types(ctx.structured_type)
         self.children = [
             (
                 f.name,
-                alias := keymap[f.name] if keymap and f.name in keymap else f.name,
+                alias,
                 f.default is MISSING and f.default_factory is MISSING,
                 _structure_site(
                     CtxImpl.create(
@@ -585,7 +588,7 @@ class DataClassExe:
                     )
                 ),
             )
-            for f, t in field_types
+            for (f, t), alias in zip(field_types, aliases)
         ]
 
     def __call__(self, ctx: CtxImpl[DataClassBase, Any, Any, Any], data: dict) -> Any:
@@ -612,15 +615,108 @@ class DataClassExe:
             raise MissingFields(ctx, data, missing_keys)
 
 
+_MISSING: Any = object()
+
+
+def _lookup_keys(ctx: CtxImpl, data: dict, keys: KeyTuple) -> Any:
+    v: Any = data
+    for depth, k in enumerate(keys):
+        if depth and not isinstance(v, dict):
+            raise ValidationError(
+                ctx,
+                data,
+                f"Expected a dict at {format_keys(keys[:depth])} to read {format_keys(keys)}, got {type(v).__name__}",
+            )
+        v = v.get(k, _MISSING)
+        if v is _MISSING:
+            break
+    return v
+
+
+class PathFieldReader:
+    __slots__ = ("children",)
+
+    children: list[tuple[str, KeyTuple, bool, Site]]  # field_name, keys, is_required, site
+
+    def __init__(self, children: list[tuple[str, KeyTuple, bool, Site]]):
+        self.children = children
+
+    def read(self, ctx: CtxImpl, data: dict) -> dict[str, Any]:
+        out = {}
+        for f, keys, is_required, site in self.children:
+            v = _lookup_keys(ctx, data, keys)
+            if v is _MISSING:
+                if is_required:
+                    raise MissingFields(ctx, data, self._missing(ctx, data))
+                continue
+            out[f] = site.exe(site.ctx, v) if (site.is_bypass_safe and type(v) is site.data_type) else site(v)
+        return out
+
+    def _missing(self, ctx: CtxImpl, data: dict) -> list[str]:
+        return [
+            keys[0] if len(keys) == 1 else format_keys(keys)
+            for _, keys, is_required, _ in self.children
+            if is_required and _lookup_keys(ctx, data, keys) is _MISSING
+        ]
+
+
+class DataClassPathExe:
+    __slots__ = ("fields", "dataclass_type", "consumed_heads")
+
+    fields: PathFieldReader
+    dataclass_type: Any
+    consumed_heads: frozenset[str]
+
+    def __init__(
+        self,
+        ctx: CtxImpl[DataClassBase, Any, Any, Any],
+        field_types: list[tuple[Field, Any]],
+        keys: list[KeyTuple],
+    ):
+        self.dataclass_type = ctx.structured_type
+        self.fields = PathFieldReader(
+            [
+                (
+                    f.name,
+                    k,
+                    f.default is MISSING and f.default_factory is MISSING,
+                    _structure_site(
+                        CtxImpl.create(
+                            ctx,
+                            t,
+                            f"{ctx.structured_path}.{f.name}",
+                            keys_path(ctx.unstructured_path, k),
+                            f,
+                        )
+                    ),
+                )
+                for (f, t), k in zip(field_types, keys)
+            ]
+        )
+        self.consumed_heads = frozenset(k[0] for k in keys)
+
+    def __call__(self, ctx: CtxImpl[DataClassBase, Any, Any, Any], data: dict) -> Any:
+        args = self.fields.read(ctx, data)
+        heads = self.consumed_heads
+        if any(k not in heads for k in data):
+            raise ExtraFields(ctx, data, [k for k in data if k not in heads])
+        try:
+            return self.dataclass_type(**args)
+        except TypeError as e:
+            raise NoStructureHook(ctx, data) from e
+
+
 @register.ctx_subtypes
-def _structure_default(ctx: CtxImpl[TypedDictBase, Any, Any, Any], data: dict, *, keymap: dict[str, str] | None) -> Exe:
-    return TypedDictExe(ctx, keymap)
+def _structure_default(ctx: CtxImpl[TypedDictBase, Any, Any, Any], data: dict, *, keymap: Keymap | None) -> Exe:
+    field_types = resolve_typeddict_field_types(ctx.structured_type)
+    keys = resolve_keys(ctx, data, (name for name, _ in field_types), keymap)
+    if needs_path_exe(keys):
+        return TypedDictPathExe(ctx, field_types, keys)
+    return TypedDictExe(ctx, field_types, [k[0] for k in keys])
 
 
-class TypedDictExe:
+class TypedDictExeBase:
     __slots__ = (
-        "children",
-        "missing_sentinel",
         "declared_keys",
         "field_names",
         "closed",
@@ -628,55 +724,21 @@ class TypedDictExe:
         "extra_children",
     )
 
-    children: list[tuple[str, str, bool, Site]]  # field_name, alias, required, site
-    missing_sentinel: object
-    declared_keys: frozenset[str]
+    declared_keys: frozenset[str]  # keys the fields consume at this level
     field_names: frozenset[str]
     closed: bool
     extra_items_type: Any
     extra_children: dict[str, Site]
 
-    def __init__(self, ctx: CtxImpl[TypedDictBase, Any, Any, Any], keymap: dict[str, str] | None):
-        self.missing_sentinel = object()
-        field_types = resolve_typeddict_field_types(ctx.structured_type)
-        td_cls = get_origin(ctx.structured_type) or ctx.structured_type
-        required = getattr(td_cls, "__required_keys__", frozenset())
-        self.children = [
-            (
-                name,
-                alias := keymap[name] if keymap and name in keymap else name,
-                name in required,
-                _structure_site(
-                    CtxImpl.create(
-                        ctx,
-                        t,
-                        f"{ctx.structured_path}.{format_field(name)}",
-                        itemref_path(ctx.unstructured_path, alias),
-                        name,
-                    )
-                ),
-            )
-            for name, t in field_types
-        ]
-        self.declared_keys = frozenset(alias for _, alias, _, _ in self.children)
-        self.field_names = frozenset(name for name, _, _, _ in self.children)
+    def _init_extras(
+        self, ctx: CtxImpl[TypedDictBase, Any, Any, Any], declared_keys: frozenset[str], field_names: frozenset[str]
+    ) -> None:
+        self.declared_keys = declared_keys
+        self.field_names = field_names
         self.closed, self.extra_items_type = get_typeddict_extras_policy(ctx.structured_type)
         self.extra_children = {}
 
-    def __call__(self, ctx: CtxImpl[TypedDictBase, Any, Any, Any], data: dict) -> Any:
-        try:
-            out = {
-                f: (site.exe(site.ctx, v) if (site.is_bypass_safe and type(v) is site.data_type) else site(v))
-                for f, alias, is_required, site in self.children
-                if is_required or data.get(alias, self.missing_sentinel) is not self.missing_sentinel
-                for v in (data[alias],)
-            }
-        except KeyError as e:
-            missing_keys = [alias for _, alias, is_required, _ in self.children if is_required and alias not in data]
-            if not (missing_keys and e.args and e.args[0] in set(missing_keys)):
-                # The exception is from somewhere else, not a missing key
-                raise  # pragma: no cover
-            raise MissingFields(ctx, data, missing_keys)
+    def _extras(self, ctx: CtxImpl[TypedDictBase, Any, Any, Any], data: dict, out: dict) -> None:
         if self.closed:
             extras = data.keys() - self.declared_keys
             if extras:
@@ -702,11 +764,108 @@ class TypedDictExe:
                     )
                     self.extra_children[k] = site
                 out[k] = site(data[k])
+
+
+class TypedDictExe(TypedDictExeBase):
+    __slots__ = ("children", "missing_sentinel")
+
+    children: list[tuple[str, str, bool, Site]]  # field_name, alias, required, site
+    missing_sentinel: object
+
+    def __init__(
+        self,
+        ctx: CtxImpl[TypedDictBase, Any, Any, Any],
+        field_types: list[tuple[str, Any]],
+        aliases: list[str],
+    ):
+        self.missing_sentinel = object()
+        td_cls = get_origin(ctx.structured_type) or ctx.structured_type
+        required = getattr(td_cls, "__required_keys__", frozenset())
+        self.children = [
+            (
+                name,
+                alias,
+                name in required,
+                _structure_site(
+                    CtxImpl.create(
+                        ctx,
+                        t,
+                        f"{ctx.structured_path}.{format_field(name)}",
+                        itemref_path(ctx.unstructured_path, alias),
+                        name,
+                    )
+                ),
+            )
+            for (name, t), alias in zip(field_types, aliases)
+        ]
+        self._init_extras(
+            ctx,
+            frozenset(alias for _, alias, _, _ in self.children),
+            frozenset(name for name, _, _, _ in self.children),
+        )
+
+    def __call__(self, ctx: CtxImpl[TypedDictBase, Any, Any, Any], data: dict) -> Any:
+        try:
+            out = {
+                f: (site.exe(site.ctx, v) if (site.is_bypass_safe and type(v) is site.data_type) else site(v))
+                for f, alias, is_required, site in self.children
+                if is_required or data.get(alias, self.missing_sentinel) is not self.missing_sentinel
+                for v in (data[alias],)
+            }
+        except KeyError as e:
+            missing_keys = [alias for _, alias, is_required, _ in self.children if is_required and alias not in data]
+            if not (missing_keys and e.args and e.args[0] in set(missing_keys)):
+                # The exception is from somewhere else, not a missing key
+                raise  # pragma: no cover
+            raise MissingFields(ctx, data, missing_keys)
+        if self.closed or self.extra_items_type is not None:
+            self._extras(ctx, data, out)
+        return out
+
+
+class TypedDictPathExe(TypedDictExeBase):
+    __slots__ = ("fields",)
+
+    fields: PathFieldReader
+
+    def __init__(
+        self,
+        ctx: CtxImpl[TypedDictBase, Any, Any, Any],
+        field_types: list[tuple[str, Any]],
+        keys: list[KeyTuple],
+    ):
+        td_cls = get_origin(ctx.structured_type) or ctx.structured_type
+        required = getattr(td_cls, "__required_keys__", frozenset())
+        self.fields = PathFieldReader(
+            [
+                (
+                    name,
+                    k,
+                    name in required,
+                    _structure_site(
+                        CtxImpl.create(
+                            ctx,
+                            t,
+                            f"{ctx.structured_path}.{format_field(name)}",
+                            keys_path(ctx.unstructured_path, k),
+                            name,
+                        )
+                    ),
+                )
+                for (name, t), k in zip(field_types, keys)
+            ]
+        )
+        self._init_extras(ctx, frozenset(k[0] for k in keys), frozenset(name for name, _ in field_types))
+
+    def __call__(self, ctx: CtxImpl[TypedDictBase, Any, Any, Any], data: dict) -> Any:
+        out = self.fields.read(ctx, data)
+        if self.closed or self.extra_items_type is not None:
+            self._extras(ctx, data, out)
         return out
 
 
 @register.ctx_subtypes
-def _structure_default(ctx: CtxImpl[LiteralBase, Any, Any, Any], data: Any, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[LiteralBase, Any, Any, Any], data: Any, *, keymap: Keymap | None) -> Exe:
     args = get_args(ctx.structured_type)
     if literal_values_contain(args, data) and len(args) > 1:
         return UnionMemberExe(ctx, Literal[data])
@@ -715,7 +874,7 @@ def _structure_default(ctx: CtxImpl[LiteralBase, Any, Any, Any], data: Any, *, k
 
 @register.ctx_subtypes
 def _structure_default(
-    ctx: CtxImpl[LiteralBase, Any, Any, tuple[Any, KeySeg[Any]]], data: Any, *, keymap: dict[str, str] | None
+    ctx: CtxImpl[LiteralBase, Any, Any, tuple[Any, KeySeg[Any]]], data: Any, *, keymap: Keymap | None
 ) -> Exe:
     return literal_key_exe
 
@@ -752,7 +911,7 @@ def literal_key_exe(ctx: CtxImpl[LiteralBase, Any, Any, Any], data: Any) -> Any:
 
 
 @register.ctx_subtypes
-def _structure_default(ctx: CtxImpl[NewTypeBase, Any, Any, Any], data: Any, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[NewTypeBase, Any, Any, Any], data: Any, *, keymap: Keymap | None) -> Exe:
     supertype = ctx.structured_type.__supertype__
     try:
         return _structure_default(ctx._replace_type(supertype), data, keymap=None)
@@ -761,7 +920,7 @@ def _structure_default(ctx: CtxImpl[NewTypeBase, Any, Any, Any], data: Any, *, k
 
 
 @register.ctx_subtypes
-def _structure_default(ctx: CtxImpl[UnionBase, Any, Any, Any], data: Any, *, keymap: dict[str, str] | None) -> Exe:
+def _structure_default(ctx: CtxImpl[UnionBase, Any, Any, Any], data: Any, *, keymap: Keymap | None) -> Exe:
     if keymap is not None:
         raise ValidationError(ctx, data, "keymap is not supported for union default conversion")
     dispatch = config._dispatcher.get().dispatch

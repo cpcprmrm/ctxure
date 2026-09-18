@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from typing import Any, Never
 
+from ctxure._keymap import Keymap
 from ctxure.context import CtxImpl
 from ctxure.multidispatch import Method
 
@@ -90,9 +91,6 @@ def mark_not_bypass_safe(site: Site) -> None:
         current = parent_ctx._site if parent_ctx is not None else None
 
 
-_KeymapType = dict[str, str]
-
-
 class HookExe:
     __slots__ = ("hook", "default_exe", "default_dtype", "by_type_site", "keymap", "keymap_cache")
 
@@ -100,8 +98,8 @@ class HookExe:
     default_exe: Exe | None
     default_dtype: Any
     by_type_site: "Site | None"
-    keymap: _KeymapType | None
-    keymap_cache: dict[tuple[Any, int], tuple[Exe, _KeymapType]] | None
+    keymap: Keymap | None
+    keymap_cache: dict[tuple[Any, int], tuple[Exe, Keymap]] | None
 
     def __init__(self, hook: Method):
         self.hook = hook

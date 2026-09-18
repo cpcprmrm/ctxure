@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from ctxure import Ctx, Of, ctxure_config, get_extra, structure, structure_default
+from ctxure import Ctx, KeyPath, Of, ctxure_config, get_extra, structure, structure_default
+from ctxure.structure import DataClassExe, DataClassPathExe
 
 
 class Counter:
@@ -156,6 +157,38 @@ def test_structure_default_keymap_secondary_cache(testregister):
         for _ in range(4):
             structure(Foo, {"a": 1, "B": 3})
             structure(Foo, {"a": -1, "_b": 3})
+
+        assert exe_holder.keymap_cache[(dict, id(keymap1))][0] is exe1
+        assert exe_holder.keymap_cache[(dict, id(keymap2))][0] is exe2
+
+
+def test_structure_default_keypath_secondary_cache(testregister):
+    @dataclass
+    class Foo:
+        a: int
+        b: int
+
+    keymap1 = {"b": KeyPath("x", "b")}
+    keymap2 = {"b": "_b"}
+
+    @testregister
+    def structure_hook(ctx: Ctx[Foo], data: dict) -> Foo:
+        km = keymap1 if data["a"] > 0 else keymap2
+        return structure_default(ctx, data, km)
+
+    with ctxure_config(testregister):
+        structure(Foo, {"a": 1, "x": {"b": 2}})
+        structure(Foo, {"a": -1, "_b": 2})
+
+        exe_holder = testregister.structure_cache.get(Foo).exe
+        exe1 = exe_holder.keymap_cache[(dict, id(keymap1))][0]
+        exe2 = exe_holder.keymap_cache[(dict, id(keymap2))][0]
+        assert type(exe1) is DataClassPathExe
+        assert type(exe2) is DataClassExe
+
+        for _ in range(4):
+            assert structure(Foo, {"a": 1, "x": {"b": 3}}) == Foo(1, 3)
+            assert structure(Foo, {"a": -1, "_b": 3}) == Foo(-1, 3)
 
         assert exe_holder.keymap_cache[(dict, id(keymap1))][0] is exe1
         assert exe_holder.keymap_cache[(dict, id(keymap2))][0] is exe2
