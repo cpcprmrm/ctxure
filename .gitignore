@@ -58,6 +58,7 @@ nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
+mutants/
 
 # Jupyter Notebook
 .ipynb_checkpoints

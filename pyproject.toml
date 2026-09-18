@@ -31,7 +31,10 @@ dev = [
     "pyright",
     "pytest",
     "pytest-cov",
-    "ruff"
+    "ruff",
+]
+mutation = [
+    "mutmut",
 ]
 
 [build-system]
@@ -43,6 +46,11 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+testpaths = ["test"]
+
+[tool.mutmut]
+source_paths = ["src/ctxure/"]
+pytest_add_cli_args_test_selection = ["test/"]
 
 [tool.pyright]
 reportRedeclaration = false
