@@ -1126,6 +1126,7 @@ def test_unstructure_primitive_union():
 
     assert unstructure(int | float, 1.1) == 1.1
     assert unstructure(int | float, 1) == 1
+    assert type(unstructure(int | float, 1)) is int
 
     assert unstructure(int | bool, True) is True
     assert unstructure(int | bool, 1) == 1
@@ -1386,6 +1387,24 @@ def test_unstructure_union_duplicated_members():
 
     assert unstructure(Foo | Foo, Foo(1)) == {"a": 1}
     assert unstructure(Foo | Bar | Foo, Foo(1)) == {"a": 1}
+
+
+IntOrStr = TypeAliasType("IntOrStr", int | str)
+
+
+def test_unstructure_union_with_union_alias_member():
+    assert unstructure(IntOrStr | None, 1) == 1
+    assert unstructure(IntOrStr | None, "a") == "a"
+    assert unstructure(IntOrStr | None, None) is None
+    assert unstructure(IntOrStr | int, 1) == 1
+
+
+def test_unstructure_literal_union():
+    assert unstructure(Literal["a"] | int, "a") == "a"
+    assert unstructure(Literal["a"] | int, 3) == 3
+
+    with pytest.raises(NoUnstructureHook):
+        unstructure(Literal["a"] | int, "b")
 
 
 def test_unstructure_indistinguishable_union():

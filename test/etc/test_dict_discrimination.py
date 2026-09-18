@@ -1265,3 +1265,45 @@ def test_presence_split_prefers_tag_promotable_field():
     assert decide({"code": 500, "message": "boom"}) is Error
     assert decide({"type": "video", "content": "x"}) is None
     assert decide({"type": "text", "url": "http://x"}) is None
+
+
+def test_dataclass_common_optional_field_sorted_before_discriminator():
+    @dataclass
+    class A:
+        x: int
+        common: int = 0
+
+    @dataclass
+    class B:
+        y: int
+        common: int = 0
+
+    decide = generate_decision_func([A, B])
+    assert decide is not None
+    assert decide({"x": 1}) is A
+    assert decide({"y": 1, "common": 2}) is B
+    assert decide({"common": 2}) is None
+
+
+def test_dataclass_tag_field_with_shared_value_sorted_before_distinct_tag():
+    @dataclass
+    class A:
+        kind: Literal["k"]
+        type: Literal["a"]
+        v: int
+
+    @dataclass
+    class B:
+        kind: Literal["k"]
+        type: Literal["b"]
+        v: int
+
+    tree = build_decision_tree([A, B])
+    assert isinstance(tree, TagSplit)
+    assert tree.field == "type"
+
+    decide = generate_decision_func([A, B])
+    assert decide is not None
+    assert decide({"kind": "k", "type": "a", "v": 1}) is A
+    assert decide({"kind": "k", "type": "b", "v": 1}) is B
+    assert decide({"kind": "k", "type": "c", "v": 1}) is None

@@ -973,6 +973,7 @@ def test_structure_primitive_union():
 
     assert structure(int | float, 1.1) == 1.1
     assert structure(int | float, 1) == 1
+    assert type(structure(int | float, 1)) is int
 
     assert structure(int | str | None, 1) == 1
     assert structure(int | str | None, "a") == "a"
@@ -1099,6 +1100,19 @@ def test_structure_union_duplicated_members():
 
     assert structure(Foo | Foo, {"a": 1}) == Foo(1)
     assert structure(Foo | Bar | Foo, {"a": 1}) == Foo(1)
+
+
+IntOrStr = TypeAliasType("IntOrStr", int | str)
+
+
+def test_structure_union_with_union_alias_member():
+    assert structure(IntOrStr | None, 1) == 1
+    assert structure(IntOrStr | None, "a") == "a"
+    assert structure(IntOrStr | None, None) is None
+    assert structure(IntOrStr | int, 1) == 1
+
+    with pytest.raises(NoStructureHook):
+        structure(IntOrStr | None, 1.5)
 
 
 def test_structure_typeddict():

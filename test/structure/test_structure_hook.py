@@ -1162,6 +1162,8 @@ def test_structure_hook_literal_data(testregister):
         assert structure(int, 1) == 10
         assert structure(int, 2) == 20
         assert structure(int, 3) == 3
+        assert structure(int | str, 1) == 10
+        assert structure(int | str, 3) == 3
 
     @testregister
     def structure_hook(ctx: Ctx[int], data: int) -> int:
@@ -1176,6 +1178,25 @@ def test_structure_hook_literal_data(testregister):
         assert structure(int, 1) == 10
         assert structure(int, 2) == 20
         assert structure(int, 3) == 300
+
+
+def test_structure_hook_literal_data_selects_union_member(testregister):
+    class Token:
+        pass
+
+    token = Token()
+
+    # Only this hook can produce a Token, and only for the literal "token".
+    @testregister
+    def structure_hook(ctx: Ctx[Token], data: Literal["token"]) -> Token:
+        return token
+
+    with ctxure_config(dispatcher=testregister):
+        assert structure(Token | int, "token") is token
+        assert structure(Token | int, 1) == 1
+
+        with pytest.raises(NoStructureHook):
+            structure(Token | int, "other")
 
 
 def test_structure_hook_multitype_literal_data(testregister):

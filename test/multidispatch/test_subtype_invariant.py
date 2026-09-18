@@ -55,6 +55,7 @@ class IntTD(GenTD[int]):
 
 UserId = NewType("UserId", int)
 Email = NewType("Email", str)
+Flag = NewType("Flag", bool)
 NewIntBox = NewType("NewIntBox", Box[int])
 
 
@@ -166,6 +167,9 @@ def test_tuples():
     assert is_subtype_invariant(tuple[()], tuple[int, ...])
     assert is_subtype_invariant(tuple[()], tuple[Any, ...])
     assert not is_subtype_invariant(tuple[()], tuple[int, str])
+    assert not is_subtype_invariant(list[tuple[int]], list[tuple[()]])
+    assert not is_subtype_invariant(list[tuple[()]], list[tuple[int]])
+    assert is_subtype_invariant(list[tuple[()]], list[tuple[()]])
     assert is_subtype_invariant(tuple[Never, ...], tuple[int, ...])
     assert is_subtype_invariant(tuple[Never, int], tuple[str, int])
     assert not is_subtype_invariant(tuple[Never, str], tuple[str, int])
@@ -253,6 +257,39 @@ def test_typeddict_generic():
     assert is_subtype_invariant(IntTD, TypedDictBase)
     assert is_subtype_invariant(GenTD, GenTD[Any])
     assert is_subtype_invariant(GenTD[int], GenTD)
+
+
+def test_newtypes():
+    assert is_subtype_invariant(UserId, UserId)
+    assert is_subtype_invariant(UserId, int)
+    assert is_subtype_invariant(UserId, object)
+    assert not is_subtype_invariant(int, UserId)
+    assert not is_subtype_invariant(UserId, str)
+    assert is_subtype_invariant(Email, str)
+    assert not is_subtype_invariant(Email, UserId)
+    assert not is_subtype_invariant(Flag, UserId)
+    assert is_subtype_invariant(NewIntBox, Box[int])
+    assert not is_subtype_invariant(Box[int], NewIntBox)
+    assert not is_subtype_invariant(NewIntBox, Box[str])
+    assert is_subtype_invariant(NewIntBox, Box[Any])
+    assert is_subtype_invariant(NewIntBox, Box)
+    assert not is_subtype_invariant(UserId, Box[int])
+    assert not is_subtype_invariant(Box[int], UserId)
+    assert not is_subtype_invariant(Literal[1, 2], UserId)
+    assert not is_subtype_invariant(UserId, Literal[1, 2])
+    assert not is_subtype_invariant(UserId, MyTD)
+    assert not is_subtype_invariant(MyTD, UserId)
+    assert is_subtype_invariant(UserId, UserId | Box)
+    assert not is_subtype_invariant(UserId | Box, UserId)
+    assert is_subtype_invariant(UserId, str | int)
+    assert not is_subtype_invariant(str | int, UserId)
+
+
+def test_newtypebase():
+    assert is_subtype_invariant(UserId, NewTypeBase)
+    assert is_subtype_invariant(Flag, NewTypeBase)
+    assert not is_subtype_invariant(NewTypeBase, UserId)
+    assert not is_subtype_invariant(int, NewTypeBase)
 
 
 def test_unions_in_nested_context():

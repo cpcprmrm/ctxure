@@ -2,6 +2,7 @@ from abc import ABC
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import Enum
+from itertools import permutations
 from typing import Any, Generic, Literal, NewType, Optional, Sequence, TypedDict, TypeVar, cast
 
 import pytest
@@ -104,6 +105,41 @@ def test_unary_dispatch_simple_hierarchy_reversed_registration():
 
     with pytest.raises(NoMatchFound):
         foo(object())
+
+
+def test_unary_dispatch_diamond_hierarchy():
+    class A:
+        pass
+
+    class B:
+        pass
+
+    class C(A, B):
+        pass
+
+    def foo(x: A) -> str:
+        return "A"
+
+    foo_a = foo
+
+    def foo(x: B) -> str:
+        return "B"
+
+    foo_b = foo
+
+    def foo(x: C) -> str:
+        return "C"
+
+    foo_c = foo
+
+    for order in permutations([foo_a, foo_b, foo_c]):
+        dsp = Dispatch()
+        for f in order:
+            dsp(f)
+        mm = dsp["foo"]
+        assert mm(C()) == "C", order
+        assert mm(A()) == "A", order
+        assert mm(B()) == "B", order
 
 
 def test_unary_dispatch_object_any():
@@ -423,6 +459,37 @@ def test_unary_dispatch_literal_with_unhashable_arg():
     assert foo([1, 2, 3]) == "list"
     assert foo({"a": 1}) == "dict"
     assert foo(1) == "lit"
+
+
+def test_binary_dispatch_literal_registered_at_later_position_first():
+    dsp = Dispatch()
+
+    @dsp
+    def foo(x: int, y: Literal["a"]) -> str:
+        return "int, 'a'"
+
+    @dsp
+    def foo(x: Literal[0], y: str) -> str:
+        return "0, str"
+
+    assert foo(5, "a") == "int, 'a'"
+    assert foo(0, "b") == "0, str"
+    assert foo(0, "a") == "0, str"
+
+
+def test_binary_dispatch_literal_only_at_first_position():
+    dsp = Dispatch()
+
+    @dsp
+    def foo(x: Literal["a"], y: int) -> str:
+        return "'a', int"
+
+    @dsp
+    def foo(x: str, y: int) -> str:
+        return "str, int"
+
+    assert foo("a", 1) == "'a', int"
+    assert foo("b", 1) == "str, int"
 
 
 def test_unary_dispatch_literal_covariant():
@@ -767,6 +834,22 @@ def test_dispatch_default_value_not_allowed():
         @dsp
         def foo(x: int, y: str = "a"):
             pass
+
+
+def test_dispatch_unannotated_parameter_is_object():
+    dsp = Dispatch()
+
+    @dsp
+    def foo(x) -> str:
+        return "object"
+
+    @dsp
+    def foo(x: int) -> str:
+        return "int"
+
+    assert foo(1) == "int"
+    assert foo("a") == "object"
+    assert foo(None) == "object"
 
 
 def test_dispatch_keyword_only_arguments():
@@ -1915,6 +1998,26 @@ def test_builtin_container_toplevel_hint_rejection():
         def foo(x: Foo):
             pass
 
+    with pytest.raises(TypeError):
+
+        @dsp
+        def foo(x: tuple[int]) -> None:
+            pass
+
+    with pytest.raises(TypeError):
+
+        @dsp
+        def foo(x: tuple[int, ...]) -> None:
+            pass
+
+    @dsp
+    def foo(x: tuple[Any, ...]) -> None:
+        pass
+
+    @dsp
+    def foo(x: tuple) -> None:
+        pass
+
     @dsp
     def foo(x: list[Any]) -> None:
         pass
@@ -1968,6 +2071,12 @@ def test_frozen_slotted_generic_toplevel_hint_rejection():
         def __init__(self, value: T) -> None:
             self.value = value
 
+    class SlotsWithDict(Generic[T]):
+        __slots__ = ("value", "__dict__")
+
+        def __init__(self, value: T) -> None:
+            self.value = value
+
     @dataclass(frozen=True)
     class Point:
         x: float
@@ -1977,7 +2086,7 @@ def test_frozen_slotted_generic_toplevel_hint_rejection():
 
     # Python 3.11~3.14 don't set `__orig_class__` for these types.
     # If a later version sets it, this test will fail.
-    for cls in (FrozenBox, SlottedBox, ManualSlots, SlotsWithOrig, RegularBox):
+    for cls in (FrozenBox, SlottedBox, ManualSlots, SlotsWithOrig, SlotsWithDict, RegularBox):
         alias = cast(Any, cls)[int]
         instance = alias(sentinel)
         actually_cannot = getattr(instance, "__orig_class__", None) is None
@@ -2034,6 +2143,11 @@ def test_frozen_slotted_generic_toplevel_hint_rejection():
     # slots with __orig_class__ declared → allowed
     @dsp
     def foo(x: SlotsWithOrig[int]) -> None:
+        pass
+
+    # slots with __dict__ declared → allowed
+    @dsp
+    def foo(x: SlotsWithDict[int]) -> None:
         pass
 
 
