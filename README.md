@@ -587,7 +587,7 @@ def structure_hook(ctx: Ctx[Event], data: dict) -> Event:
 
 Scoped hooks are also the mechanism for thread safety: use a separate dispatcher per thread via `register.copy()` and `ctxure_config`.
 
-A dispatcher can run only one `structure` or `unstructure` call at a time. Calling `structure` or `unstructure` again from inside a hook raises `ReentranceError`. Inside hooks, use `structure_default`, `unstructure_default`, `structure_by_type`, or `unstructure_by_type` to delegate to Ctxure.
+A dispatcher can run only one `structure` call and one `unstructure` call at a time. Calling `structure` while a `structure` call is already running on the same dispatcher (for example, from inside a structure hook) raises `ReentranceError`, and likewise for `unstructure`. Calling the other direction is allowed: a structure hook may call `unstructure`, and vice versa. Inside hooks, use `structure_default`, `unstructure_default`, `structure_by_type`, or `unstructure_by_type` to delegate to Ctxure.
 
 ```python
 from threading import Thread
@@ -1117,10 +1117,10 @@ CtxureError
 - **ValidationError** — raised by hooks (including built-ins) to signal that the data is invalid for the target type. Hook authors typically raise this directly: `raise ValidationError(ctx, data, "...")`.
 - **MissingFields / ExtraFields** — specializations of `ValidationError` raised by the default dataclass / TypedDict handlers when required fields are absent or unexpected keys are present.
 - **AmbiguousUnion** — union dispatch could not pick a single candidate (either probing matched several, or the chosen members are indistinguishable).
-- **ReentranceError** — raised when `structure` or `unstructure` is called while another conversion is already running on the same dispatcher.
+- **ReentranceError** — raised when `structure` is called while another `structure` call is already running on the same dispatcher, or `unstructure` while another `unstructure` call is running. It signals API misuse rather than invalid data, so it carries no `ctx` or `data`.
 
 
-Every Ctxure error exposes these attributes:
+Every Ctxure error except `ReentranceError` exposes these attributes:
 
 - `ctx` — the `Ctx` at which the error was raised. `ctx.structured_path` is included in the default message; use `ctx.unstructured_path`, `ctx.structured_type`, `ctx.parent`, `get_extra(ctx)`, etc. for richer inspection.
 - `data` — the data value that triggered the error.
