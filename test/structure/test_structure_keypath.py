@@ -131,6 +131,7 @@ def test_structure_keypath_reports_top_level_extras(testregister):
         with pytest.raises(ExtraFields) as e:
             structure(User, data)
     assert e.value.extra == ["junk", "more"]
+    assert e.value.data is data
     assert e.value.ctx.structured_path == "$"
 
 
@@ -154,9 +155,11 @@ def test_structure_keypath_missing_at_each_depth(testregister):
             structure(Deep, {"x": {"y": {}}})
         assert e.value.missing == ["a", "['x']['b']", "['x']['y']['c']"]
 
+        data = {"a": 1}
         with pytest.raises(MissingFields) as e:
-            structure(Deep, {"a": 1})
+            structure(Deep, data)
         assert e.value.missing == ["['x']['b']", "['x']['y']['c']"]
+        assert e.value.data is data
 
         with pytest.raises(MissingFields) as e:
             structure(Deep, {"a": 1, "x": {"b": 2}})
@@ -219,6 +222,9 @@ def test_structure_keypath_error_paths(testregister):
             structure(User, {"id": 1, "profile": {"name": 3}, "bank": {"balance": 1.0}})
     assert e.value.ctx.structured_path == "$.name"
     assert e.value.ctx.unstructured_path == "$['profile']['name']"
+    assert e.value.ctx.structured_key.name == "name"
+    assert e.value.ctx.parent is not None
+    assert e.value.ctx.parent.structured_type is User
 
 
 def test_structure_keypath_path_hooks_still_fire(testregister):
@@ -477,6 +483,14 @@ def test_structure_keypath_typeddict(testregister):
         with pytest.raises(ValidationError, match=r"Expected a dict at \['profile'\]"):
             structure(Account, {"id": 1, "profile": None})
 
+        with pytest.raises(NoStructureHook) as e:
+            structure(Account, {"id": 1, "profile": {"name": 3}})
+        assert e.value.ctx.structured_path == "$.name"
+        assert e.value.ctx.unstructured_path == "$['profile']['name']"
+        assert e.value.ctx.structured_key == "name"
+        assert e.value.ctx.parent is not None
+        assert e.value.ctx.parent.structured_type is Account
+
     exe_holder = testregister.structure_cache.get(Account).exe
     assert type(exe_holder.default_exe) is TypedDictPathExe
 
@@ -667,8 +681,10 @@ def test_structure_keypath_typeddict_extra_key_conflicts_with_field(testregister
     with ctxure_config(dispatcher=testregister):
         # `name` is read from ['profile']['name'], so a top-level `name` is an extra key
         # that collides with the declared field.
-        with pytest.raises(ValidationError, match="TypedDict extra key conflicts with declared field: 'name'"):
-            structure(OpenAccount, {"id": 1, "profile": {"name": "a"}, "name": 5})
+        data = {"id": 1, "profile": {"name": "a"}, "name": 5}
+        with pytest.raises(ValidationError, match="TypedDict extra key conflicts with declared field: 'name'") as e:
+            structure(OpenAccount, data)
+        assert e.value.data is data
 
 
 def test_structure_empty_keymap(testregister):

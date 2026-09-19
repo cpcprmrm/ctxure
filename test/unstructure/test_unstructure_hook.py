@@ -240,8 +240,11 @@ def test_unstructure_hook_field(testregister):
         assert unstructure(Bar, Bar(3)) == {"a": 30}
         assert unstructure(list[Bar], [Bar(3)]) == [{"a": 30}]
 
-        with pytest.raises(MultipleUnstructureHooks):
-            unstructure(Foo, Foo(1, 2))
+        foo = Foo(1, 2)
+        with pytest.raises(MultipleUnstructureHooks) as e:
+            unstructure(Foo, foo)
+        assert e.value.data == 2
+        assert len(e.value.candidates) == 2
 
 
 def test_unstructure_hook_field_wildcard(testregister):
@@ -1233,9 +1236,11 @@ def test_unstructure_default_keymap_rejects_duplicate_keys(testregister):
             unstructure(Foo, Foo(1, 2))
         assert e.value.ctx.structured_type is Foo
 
+        data = {"a": 1, "b": 2}
         with pytest.raises(ValidationError, match="keymap maps 'a' and 'b' to the same key 'x'") as e:
-            unstructure(Bar, {"a": 1, "b": 2})
+            unstructure(Bar, data)
         assert e.value.ctx.structured_type is Bar
+        assert e.value.data is data
 
 
 @pytest.mark.parametrize(
@@ -1307,9 +1312,11 @@ def test_unstructure_default_typeddict_extra_items_with_keymap(testregister):
         assert unstructure(Foo, {"a": "x", "b": "y"}) == {"a": "x", "B": "y"}
         assert unstructure(Foo, {"a": "x", "b": "y", "extra": 99}) == {"a": "x", "B": "y", "extra": 99}
 
+        data = {"a": "x", "b": "y", "B": 99}
         with pytest.raises(ValidationError) as e:
-            unstructure(Foo, {"a": "x", "b": "y", "B": 99})
-        assert "conflicts with declared field" in str(e.value)
+            unstructure(Foo, data)
+        assert "conflicts with declared field: 'B'" in str(e.value)
+        assert e.value.data is data
 
 
 def test_unstructure_default_with_keymap_dynamic_keymap(testregister):
@@ -1380,3 +1387,21 @@ def test_unstructure_hook_reentrance_error(testregister):
     with ctxure_config(dispatcher=testregister):
         with pytest.raises(ReentranceError):
             unstructure(int, 1)
+
+
+def test_unstructure_hook_get_parent_data_nested_container(testregister):
+    # The hook on the elements must stop the inner lists from being bypassed on later calls,
+    # otherwise the inner list's recorded data goes stale.
+    seen = []
+
+    @testregister
+    def unstructure_hook(ctx: Ctx[int], data: int) -> int:
+        assert ctx.parent is not None
+        seen.append(get_data(ctx.parent))
+        return data
+
+    with ctxure_config(dispatcher=testregister):
+        assert unstructure(list[list[int]], [[1]]) == [[1]]
+        assert unstructure(list[list[int]], [[2]]) == [[2]]
+
+    assert seen == [[1], [2]]

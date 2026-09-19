@@ -766,6 +766,11 @@ def test_unstructure_typeddict_extra_items_typed():
     with pytest.raises(NoUnstructureHook) as e:
         unstructure(Foo, {"a": "hi", "bad": "not-an-int"})
     assert e.value.ctx.structured_type is int
+    assert e.value.ctx.structured_path == "$.bad"
+    assert e.value.ctx.unstructured_path == "$['bad']"
+    assert e.value.ctx.structured_key == "bad"
+    assert e.value.ctx.parent is not None
+    assert e.value.ctx.parent.structured_type is Foo
 
 
 def test_unstructure_typeddict_extra_items_readonly():
@@ -941,9 +946,11 @@ def test_unstructure_typeddict_extra_items_non_string_key():
     class Foo(ExtTypedDict, extra_items=int):
         a: int
 
+    data = {"a": 1, 1: 2}
     with pytest.raises(ValidationError) as e:
-        unstructure(Foo, {"a": 1, 1: 2})
-    assert "TypedDict extra key must be str" in str(e.value)
+        unstructure(Foo, data)
+    assert "TypedDict extra key must be str, got int: 1" in str(e.value)
+    assert e.value.data is data
     assert e.value.ctx.structured_type is Foo
     assert e.value.ctx.structured_path == "$"
 
@@ -1518,3 +1525,13 @@ def _assert_set_list(x: set | frozenset, y: Any):
     assert type(y) is list
     assert len(x) == len(y)
     assert all(e in x for e in y)
+
+
+@pytest.mark.parametrize("declared", [dict[tuple[int, int], int], Any])
+def test_unstructure_dict_key_must_unstructure_to_str(declared):
+    key = (1, 2)
+    with pytest.raises(ValidationError) as e:
+        unstructure(declared, {key: 3})
+    assert "Dict key must unstructure to str, got list: [1, 2]" in str(e.value)
+    assert e.value.data is key
+    assert e.value.ctx.structured_path == "$[~?]"

@@ -892,6 +892,7 @@ def test_structure_hook_priority_different_constraints(testregister):
         with pytest.raises(MultipleStructureHooks) as e:
             structure(Foo, {"foo": 1})
         assert len(e.value.candidates) == 2
+        assert e.value.data == 1
 
     @testregister
     def structure_hook(ctx: Ctx[Of[Foo]], data: int) -> int:
@@ -1263,6 +1264,24 @@ def test_structure_hook_get_parent_data(testregister):
         assert structure(Outer, {"inner": {"a": 5, "b": 2}}) == Outer(Inner(10, 2))
 
     assert seen == [{"a": 3, "b": 1}, {"a": 5, "b": 2}]
+
+
+def test_structure_hook_get_parent_data_nested_container(testregister):
+    # The hook on the elements must stop the inner lists from being bypassed on later calls,
+    # otherwise the inner list's recorded data goes stale.
+    seen = []
+
+    @testregister
+    def structure_hook(ctx: Ctx[int], data: int) -> int:
+        assert ctx.parent is not None
+        seen.append(get_data(ctx.parent))
+        return data
+
+    with ctxure_config(dispatcher=testregister):
+        assert structure(list[list[int]], [[1]]) == [[1]]
+        assert structure(list[list[int]], [[2]]) == [[2]]
+
+    assert seen == [[1], [2]]
 
 
 def test_structure_hook_get_parent_data_list(testregister):

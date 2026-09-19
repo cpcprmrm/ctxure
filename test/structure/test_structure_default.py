@@ -222,6 +222,9 @@ def test_structure_bytes():
     assert e.value.ctx.unstructured_path == "$"
     assert e.value.data == "not valid base64!"
 
+    with pytest.raises(ValidationError):
+        structure(bytes, "YW$Jj")
+
     for rejected in (1, 1.23, True, b"abc"):
         with pytest.raises(NoStructureHook) as e:
             structure(bytes, rejected)
@@ -684,6 +687,7 @@ def test_structure_dict_key_validation_errors():
         structure(dict[int, int], {"x": 1})
     assert e.value.ctx.structured_type is int
     assert e.value.ctx.structured_path == "$[~?]"
+    assert e.value.ctx.unstructured_path == "$[~'x']"
     assert e.value.data == "x"
     assert "Cannot parse 'x' as int" in str(e.value)
 
@@ -695,12 +699,62 @@ def test_structure_dict_key_validation_errors():
     with pytest.raises(ValidationError) as e:
         structure(dict[Literal[1], int], {None: 1})
     assert e.value.ctx.structured_type == Literal[1]
+    assert e.value.ctx.unstructured_path == "$[~?]"
     assert e.value.data is None
 
     with pytest.raises(ValidationError) as e:
         structure(dict[Literal[Foo.A], int], {"z": 1})
     assert e.value.ctx.structured_type == Literal[Foo.A]
     assert e.value.data == "z"
+
+
+class _Color(Enum):
+    RED = "red"
+
+
+@pytest.mark.parametrize(
+    "target, bad, message",
+    [
+        (_Color, "blue", "'blue' is not a valid value of"),
+        (UUID, "not-a-uuid", "Cannot parse 'not-a-uuid' as <class 'uuid.UUID'>"),
+        (Decimal, "not-a-decimal", "Cannot parse 'not-a-decimal' as <class 'decimal.Decimal'>"),
+        (bytes, "YW$Jj", "Cannot decode 'YW$Jj' as base64"),
+        (date, "not-a-date", "Cannot parse 'not-a-date' as <class 'datetime.date'>"),
+        (datetime, "not-a-datetime", "Cannot parse 'not-a-datetime' as <class 'datetime.datetime'>"),
+        (Literal[1, "a"], 2, "Expected one of 1, 'a', got 2"),
+    ],
+)
+def test_structure_validation_error_message(target, bad, message):
+    with pytest.raises(ValidationError) as e:
+        structure(target, bad)
+    assert message in str(e.value)
+    assert e.value.data == bad
+
+
+def test_structure_optional_field_explicit_none():
+    @dataclass
+    class Foo:
+        a: int | None = 5
+
+    class Bar(TypedDict):
+        a: NotRequired[int | None]
+
+    # An explicit None is a value, not a missing key.
+    assert structure(Foo, {"a": None}) == Foo(None)
+    assert structure(Foo, {}) == Foo(5)
+    assert structure(Bar, {"a": None}) == {"a": None}
+    assert structure(Bar, {}) == {}
+
+
+def test_structure_dict_literal_key_conversion_skips_non_matching_members():
+    class Foo(Enum):
+        A = "A"
+
+    # bool members are skipped, so "1" still converts to the int member.
+    assert structure(dict[Literal[True, 1], int], {"1": 5}) == {1: 5}
+    # A failed int conversion moves on to the enum member.
+    assert structure(dict[Literal[1, Foo.A], int], {"A": 5}) == {Foo.A: 5}
+    assert structure(dict[Literal[1, Foo.A], int], {"1": 5}) == {1: 5}
 
 
 def test_structure_dataclass():
@@ -1129,12 +1183,14 @@ def test_structure_typeddict():
     assert e.value.ctx.unstructured_path == "$"
     assert e.value.data == 1
 
+    data = {"a": 1}
     with pytest.raises(MissingFields) as e:
-        structure(Foo, {"a": 1})
+        structure(Foo, data)
     assert e.value.ctx.structured_type is Foo
     assert e.value.ctx.structured_path == "$"
     assert e.value.ctx.unstructured_path == "$"
     assert e.value.missing == ["b"]
+    assert e.value.data is data
 
     with pytest.raises(MissingFields) as e:
         structure(Foo, {})
@@ -1262,11 +1318,13 @@ def test_structure_typeddict_closed():
 
     assert structure(Foo, {"a": 1}) == {"a": 1}
 
+    data = {"a": 1, "extra": 99}
     with pytest.raises(ExtraFields) as e:
-        structure(Foo, {"a": 1, "extra": 99})
+        structure(Foo, data)
     assert e.value.ctx.structured_type is Foo
     assert e.value.ctx.structured_path == "$"
     assert set(e.value.extra) == {"extra"}
+    assert e.value.data is data
 
     with pytest.raises(ExtraFields) as e:
         structure(Foo, {"a": 1, "x": 1, "y": 2})
@@ -1292,6 +1350,11 @@ def test_structure_typeddict_extra_items_typed():
         structure(Foo, {"a": "hi", "bad": "not-an-int"})
     assert e.value.ctx.structured_type is int
     assert e.value.ctx.structured_path == "$.bad"
+    assert e.value.ctx.unstructured_path == "$['bad']"
+    assert e.value.ctx.structured_key == "bad"
+    assert e.value.ctx.parent is not None
+    assert e.value.ctx.parent.structured_type is Foo
+    assert e.value.data == "not-an-int"
 
 
 def test_structure_typeddict_extra_items_readonly():
@@ -1475,9 +1538,11 @@ def test_structure_typeddict_extra_items_non_string_key():
     class Foo(ExtTypedDict, extra_items=int):
         a: int
 
+    data = {"a": 1, 1: 2}
     with pytest.raises(ValidationError) as e:
-        structure(Foo, {"a": 1, 1: 2})
-    assert "TypedDict extra key must be str" in str(e.value)
+        structure(Foo, data)
+    assert "TypedDict extra key must be str, got int: 1" in str(e.value)
+    assert e.value.data is data
     assert e.value.ctx.structured_type is Foo
     assert e.value.ctx.structured_path == "$"
 

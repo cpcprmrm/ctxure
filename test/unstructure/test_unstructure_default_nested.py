@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, TypedDict, TypeVar
+from typing import Any, Generic, TypedDict, TypeVar
 
 import pytest
 
@@ -301,3 +301,71 @@ def test_unstructure_default_typeddict_with_complex_fields():
 
     assert unstructure(Outer, {}) == {}
     assert unstructure(list[Simple], [{"items": [1]}, {}]) == [{"items": [1]}, {}]
+
+
+class _Opaque:
+    pass
+
+
+@dataclass
+class _AnyField:
+    a: Any
+
+
+@pytest.mark.parametrize(
+    "data, structured_path, unstructured_path, key",
+    [
+        ([1, _Opaque()], "$[1]", "$[1]", 1),
+        ((1, _Opaque()), "$[1]", "$[1]", 1),
+        ({_Opaque()}, "$[?]", "$[0]", None),
+        (frozenset({_Opaque()}), "$[?]", "$[0]", None),
+        ({"k": _Opaque()}, "$['k']", "$['k']", "k"),
+    ],
+)
+def test_unstructure_any_container_error_location(data, structured_path, unstructured_path, key):
+    with pytest.raises(NoUnstructureHook) as e:
+        unstructure(Any, data)
+    assert isinstance(e.value.data, _Opaque)
+    assert e.value.ctx.structured_path == structured_path
+    assert e.value.ctx.unstructured_path == unstructured_path
+    assert e.value.ctx.structured_key == key
+    assert e.value.ctx.parent is not None
+    assert e.value.ctx.parent.structured_path == "$"
+
+
+def test_unstructure_any_container_error_location_dict_key_and_dataclass_field():
+    opaque = _Opaque()
+    with pytest.raises(NoUnstructureHook) as e:
+        unstructure(Any, {opaque: 1})
+    assert e.value.data is opaque
+    assert e.value.ctx.structured_path == "$[~?]"
+    assert e.value.ctx.structured_key is opaque
+
+    with pytest.raises(NoUnstructureHook) as e:
+        unstructure(Any, _AnyField(opaque))
+    assert e.value.data is opaque
+    assert e.value.ctx.structured_path == "$.a"
+    assert e.value.ctx.unstructured_path == "$['a']"
+    assert e.value.ctx.structured_key.name == "a"
+    assert e.value.ctx.parent is not None
+    assert e.value.ctx.parent.structured_type is _AnyField
+
+
+def test_unstructure_any_containers_repeated_and_growing():
+    # Later calls reuse cached child sites (and their fast path); longer inputs add new ones.
+    for data, expected in [
+        ([1], [1]),
+        ([1, "a", 2.5], [1, "a", 2.5]),
+        ((1,), [1]),
+        ((1, "a", 2.5), [1, "a", 2.5]),
+        ({"k": 1}, {"k": 1}),
+        ({"k": 1, "j": "a"}, {"k": 1, "j": "a"}),
+        (_AnyField(1), {"a": 1}),
+        (_AnyField("a"), {"a": "a"}),
+    ]:
+        assert unstructure(Any, data) == expected
+        assert unstructure(Any, data) == expected
+
+    for data in [{1}, {1, 2, 3}, frozenset({1}), frozenset({1, 2, 3})]:
+        assert sorted(unstructure(Any, data)) == sorted(data)
+        assert sorted(unstructure(Any, data)) == sorted(data)

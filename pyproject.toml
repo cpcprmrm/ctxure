@@ -53,6 +53,7 @@ source_paths = ["src/ctxure/"]
 pytest_add_cli_args_test_selection = ["test/"]
 
 [tool.pyright]
+exclude = ["**/node_modules", "**/__pycache__", "**/.*", "mutants"]
 reportRedeclaration = false
 reportUnusedImport = true
 
