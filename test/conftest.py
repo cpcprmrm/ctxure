@@ -4,8 +4,11 @@ import pytest
 
 from ctxure import register
 
+collect_ignore_glob = []
 if sys.version_info < (3, 12):
-    collect_ignore_glob = ["*py312.py"]
+    collect_ignore_glob.append("*py312.py")
+if sys.version_info < (3, 15):
+    collect_ignore_glob.append("*py315.py")
 
 
 @pytest.fixture

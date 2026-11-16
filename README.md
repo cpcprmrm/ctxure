@@ -722,7 +722,7 @@ Composite types
     - Conversion from `dict` is supported.
     - Each declared field is converted from the source value of the same key, according to declared types.
     - Optionality follows `total=` and `Required[]` / `NotRequired[]`. Missing required keys raise `MissingFields`.
-    - PEP 728 (planned for Python 3.15, available via `typing_extensions`): with `closed=True`, extra keys raise `ExtraFields`. With `extra_items=T`, extra keys are kept and each value is structured as `T`. Otherwise (the default), extra keys are silently dropped. `closed` / `extra_items` declared on an ancestor TypedDict is inherited.
+    - PEP 728 (built into `typing` since Python 3.15, available via `typing_extensions` for earlier versions): with `closed=True`, extra keys raise `ExtraFields`. With `extra_items=T`, extra keys are kept and each value is structured as `T`. Otherwise (the default), extra keys are silently dropped. `closed` / `extra_items` declared on an ancestor TypedDict is inherited.
 - Dataclass:
     - Conversion from `dict` is supported.
     - Each declared field is converted from the source value of the same key, according to declared types.
