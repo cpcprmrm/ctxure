@@ -1609,3 +1609,25 @@ def test_structure_hook_literal_data_with_unhashable_tuple(testregister):
         assert structure(list[list[int]], ([1],)) == [[1]]
         assert structure(Any, ([1],)) == ([1],)
         assert structure(str, "x") == "X"
+
+
+def test_structure_hook_literal_data_with_tuple_data(testregister):
+    @testregister
+    def structure_hook(ctx: Ctx[str], data: Literal["x"]) -> str:
+        return "X"
+
+    with ctxure_config(dispatcher=testregister):
+        with pytest.raises(NoStructureHook):
+            structure(str, ("a",))
+
+
+def test_structure_hook_ctx_subtypes_newtype_with_tuple_target(testregister):
+    UserId = NewType("UserId", int)
+
+    @testregister.ctx_subtypes
+    def structure_hook(ctx: Ctx[UserId], data: int) -> int:
+        return data * 10
+
+    with ctxure_config(dispatcher=testregister):
+        assert structure(tuple[int], [1]) == (1,)
+        assert structure(UserId, 1) == 10

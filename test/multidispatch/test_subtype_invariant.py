@@ -427,3 +427,12 @@ AliasB = TypeAliasType("AliasB", AliasA)
 def test_type_alias_transitive_chain_invariant():
     assert is_subtype_invariant(AliasB, int)
     assert is_subtype_invariant(int, AliasB)
+
+
+def test_tuple_vs_literal_and_newtype():
+    # Literal and NewType have no class origin; comparing must not call issubclass on them.
+    TupleNT = NewType("TupleNT", tuple)
+    for lhs in (tuple, tuple[int], tuple[int, ...], tuple[()]):
+        assert not is_subtype_invariant(lhs, Literal["a"])
+        assert not is_subtype_invariant(lhs, Literal[1, 2])
+        assert not is_subtype_invariant(lhs, TupleNT)

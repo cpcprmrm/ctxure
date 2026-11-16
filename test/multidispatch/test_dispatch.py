@@ -2298,3 +2298,20 @@ def test_literal_interest_keeps_bool_and_int_apart():
 
     assert foo(0) == "zero"
     assert foo(False) == "int"
+
+
+def test_dispatch_tuple_and_literal_hints():
+    dsp = Dispatch()
+
+    @dsp
+    def foo(x: Literal["a"]) -> str:
+        return "a"
+
+    @dsp
+    def foo(x: tuple) -> str:
+        return "tuple"
+
+    assert foo("a") == "a"
+    assert foo((1,)) == "tuple"
+    # A tuple holding a list passes isinstance(_, Hashable) but raises TypeError when hashed.
+    assert foo(([1],)) == "tuple"

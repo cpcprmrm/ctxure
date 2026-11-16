@@ -303,7 +303,8 @@ def _is_subtype_tuple(
             return False
     if l_origin is tuple:
         # tuple vs non-tuple base (e.g., Sequence[V])
-        if not issubclass(tuple, r_origin):
+        # The origin of Literal or NewType is not a class.
+        if not isinstance(r_origin, type) or not issubclass(tuple, r_origin):
             return False
         r_v = r_args[0] if r_args else Any
         if l_args == (_EmptyTupleArg,):

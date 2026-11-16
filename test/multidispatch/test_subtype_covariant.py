@@ -444,3 +444,12 @@ def test_type_alias_transitive_chain():
     assert is_subtype_covariant(AliasB, int)
     assert is_subtype_covariant(int, AliasB)
     assert is_subtype_covariant(AliasB, AliasA)
+
+
+def test_tuple_vs_literal_and_newtype():
+    # Literal and NewType have no class origin; comparing must not call issubclass on them.
+    TupleNT = NewType("TupleNT", tuple)
+    for lhs in (tuple, tuple[int], tuple[int, ...], tuple[()]):
+        assert not is_subtype_covariant(lhs, Literal["a"])
+        assert not is_subtype_covariant(lhs, Literal[1, 2])
+        assert not is_subtype_covariant(lhs, TupleNT)
