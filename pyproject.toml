@@ -61,6 +61,8 @@ reportUnusedImport = true
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+# Python 3.15+ only (PEP 814); every use is guarded by `sys.version_info >= (3, 15)`.
+builtins = ["frozendict"]
 
 [tool.ruff.lint]
 ignore = [

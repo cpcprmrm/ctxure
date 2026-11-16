@@ -1,5 +1,6 @@
 # type: ignore
 
+import sys
 from collections import Counter, defaultdict, deque
 from collections.abc import (
     Collection,
@@ -58,3 +59,7 @@ _type_info: dict[type, TypeInfo] = {
     Counter: TypeInfo((Counter, dict, *MutableMapping.__mro__), (dict[_T, int],), (_T,)),
     ChainMap: TypeInfo((ChainMap, *MutableMapping.__mro__), (MutableMapping[_K, _V],), (_K, _V)),
 }
+
+if sys.version_info >= (3, 15):
+    # Not a dict subclass; registered as a virtual subclass of Mapping.
+    _type_info[frozendict] = TypeInfo((frozendict, *Mapping.__mro__), (Mapping[_K, _V],), (_K, _V))

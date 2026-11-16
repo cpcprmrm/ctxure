@@ -716,8 +716,11 @@ Composite types
     - Fixed-length tuple with one declared type per position. Each position is converted by its declared type.
     - The variadic form `tuple[T, ...]` (and bare `tuple`) is treated homogeneously, with all elements converted as `T` (or `Any` for bare).
 - `dict[K, V]`:
-    - Conversion from `dict` is supported. Both key and value are converted.
+    - Conversion from `dict` (and `frozendict` on Python 3.15+) is supported. Both key and value are converted.
     - `dict` is regarded as `dict[Any, Any]`. The single-arg `dict[K]` is not supported.
+- `frozendict[K, V]` (Python 3.15+):
+    - Same as `dict[K, V]`, but produces a `frozendict`. Conversion from `dict` or `frozendict` is supported.
+    - `frozendict` is not accepted as the source of a dataclass or `TypedDict`.
 - `TypedDict`:
     - Conversion from `dict` is supported.
     - Each declared field is converted from the source value of the same key, according to declared types.
@@ -794,6 +797,8 @@ Composite types
     - The variadic form `tuple[T, ...]` (and bare `tuple`) is treated homogeneously, with all elements unstructured as `T` (or `Any` for bare).
 - `dict[K, V]`:
     - Unstructured to `dict`. Each key is unstructured first; the result must be `str`, otherwise `ValidationError` is raised. Integer and `Enum` keys are stringified automatically.
+- `frozendict[K, V]` (Python 3.15+):
+    - Unstructured to `dict` in the same way as `dict[K, V]`. As the declared type is respected, a `frozendict` value declared as `dict[K, V]` is not supported, and vice versa.
 - `TypedDict`:
     - Unstructured to `dict`. Each declared field is unstructured according to its declared type.
     - With `extra_items=T`, extra runtime keys are kept and unstructured as `T`. Otherwise extra runtime keys are silently dropped.
@@ -820,7 +825,7 @@ When the declared type is `Any`, the runtime type drives dispatch and `Any` is p
 - `Path`, `UUID`, `Decimal`: `str(value)`.
 - `bytes`: base64-encoded `str`.
 - `date`, `datetime`: ISO-format `str`.
-- Lists, tuples, sets, frozensets, dicts, and dataclass instances are recursed into; each child carries `Any`.
+- Lists, tuples, sets, frozensets, dicts, frozendicts, and dataclass instances are recursed into; each child carries `Any`.
 
 ## Defining hooks
 
@@ -893,7 +898,7 @@ An instance `ctx` of type `Ctx` has the following properties.
     - `dataclasses.Field` instance for a dataclass field.
     - Field name (string) for a `TypedDict` field.
     - Integer index for a `Sequence`.
-    - Key (any hashable type) for a `dict` value.
+    - Key (any hashable type) for a `dict` or `frozendict` value.
     - `None` for the root context or a `set`/`frozenset` element.
 - **structured_path**: The current path in the structured data graph.
 - **unstructured_path**: The current path in the unstructured data graph.

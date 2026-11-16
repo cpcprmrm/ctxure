@@ -1,4 +1,5 @@
 import base64
+import sys
 import typing
 from collections.abc import Sequence
 from dataclasses import Field, fields, is_dataclass
@@ -731,6 +732,23 @@ def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: dict, *, keymap
     return AnyDictExe(ctx)
 
 
+if sys.version_info >= (3, 15):
+
+    @register
+    def _unstructure_default(
+        ctx: CtxImpl[frozendict, Any, Any, Any], data: frozendict, *, keymap: Keymap | None
+    ) -> Exe:
+        return DictExe(ctx)
+
+    @register
+    def _unstructure_default(ctx: CtxImpl[Any, Any, Any, Any], data: frozendict, *, keymap: Keymap | None) -> Exe:
+        return AnyDictExe(ctx)
+
+    DictLike = dict | frozendict
+else:
+    DictLike = dict
+
+
 _DICT_CHILDREN_LIMIT = 1024
 
 
@@ -748,7 +766,7 @@ class DictExe:
         self.key_type = get_type_param(ctx, 0)
         self.value_type = get_type_param(ctx, 1)
 
-    def __call__(self, ctx: CtxImpl, data: dict) -> dict[str, Any]:
+    def __call__(self, ctx: CtxImpl, data: DictLike) -> dict[str, Any]:
         result = {}
         for k, v in data.items():
             key_cache_key = (type(k), k)
@@ -786,7 +804,7 @@ class AnyDictExe:
         self.key_children = {}
         self.val_children = {}
 
-    def __call__(self, ctx: CtxImpl, data: dict) -> dict[str, Any]:
+    def __call__(self, ctx: CtxImpl, data: DictLike) -> dict[str, Any]:
         if ctx.structured_type is not Any:
             raise NoUnstructureHook(ctx, data)
         result = {}

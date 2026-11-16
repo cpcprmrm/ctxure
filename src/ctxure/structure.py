@@ -1,5 +1,6 @@
 import base64
 import binascii
+import sys
 import typing
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Collection, Sequence
@@ -457,8 +458,14 @@ class FrozenSetExe(SingleParamCollectionExe):
         )
 
 
+if sys.version_info >= (3, 15):
+    DictLike = dict | frozendict
+else:
+    DictLike = dict
+
+
 @register
-def _structure_default(ctx: CtxImpl[dict, Any, Any, Any], data: dict, *, keymap: Keymap | None) -> Exe:
+def _structure_default(ctx: CtxImpl[dict, Any, Any, Any], data: DictLike, *, keymap: Keymap | None) -> Exe:
     return DictExe(ctx)
 
 
@@ -479,7 +486,7 @@ class DictExe:
         self.key_type = get_type_param(ctx, 0)
         self.value_type = get_type_param(ctx, 1)
 
-    def __call__(self, ctx: CtxImpl, data: dict) -> Any:
+    def __call__(self, ctx: CtxImpl, data: DictLike) -> Any:
         result = {}
         for k, v in data.items():
             key_cache_key = (type(k), k)
@@ -529,6 +536,20 @@ class DictExe:
             structured_key,
         )
         return _structure_site(subctx)
+
+
+if sys.version_info >= (3, 15):
+
+    @register
+    def _structure_default(ctx: CtxImpl[frozendict, Any, Any, Any], data: DictLike, *, keymap: Keymap | None) -> Exe:
+        return FrozenDictExe(ctx)
+
+    class FrozenDictExe(DictExe):
+        __slots__ = ()
+
+        def __call__(self, ctx: CtxImpl, data: DictLike) -> Any:
+            # pyright (1.1.414) rejects any positional argument to frozendict(); a false positive.
+            return frozendict(super().__call__(ctx, data))  # pyright: ignore[reportCallIssue]
 
 
 @register
