@@ -1596,3 +1596,16 @@ def test_structure_hook_reentrance_error(testregister):
     with ctxure_config(dispatcher=testregister):
         with pytest.raises(ReentranceError):
             structure(int, 1)
+
+
+def test_structure_hook_literal_data_with_unhashable_tuple(testregister):
+    # A Literal data hint makes every structuring look the data up among literal values.
+    # A tuple holding a list passes isinstance(_, Hashable) but raises TypeError when hashed.
+    @testregister
+    def structure_hook(ctx: Ctx[str], data: Literal["x"]) -> str:
+        return "X"
+
+    with ctxure_config(dispatcher=testregister):
+        assert structure(list[list[int]], ([1],)) == [[1]]
+        assert structure(Any, ([1],)) == ([1],)
+        assert structure(str, "x") == "X"

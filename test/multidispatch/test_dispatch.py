@@ -1158,6 +1158,9 @@ def test_copy_preserves_literal_interest():
 
     assert copy["foo"](3) == "L3"
     assert orig["foo"](3) == "int"
+    # Per-type literal tables are copied too, not shared.
+    assert 3 in copy["foo"].literal_interest[0][int]
+    assert 3 not in orig["foo"].literal_interest[0][int]
 
 
 def test_nested_scope_register():
@@ -2280,3 +2283,18 @@ def test_variance_mode_conflict():
         @dsp.covariant(1)
         def foo(x: int, y: str) -> None:
             pass
+
+
+def test_literal_interest_keeps_bool_and_int_apart():
+    dsp = Dispatch()
+
+    @dsp
+    def foo(x: Literal[0]) -> str:
+        return "zero"
+
+    @dsp
+    def foo(x: int) -> str:
+        return "int"
+
+    assert foo(0) == "zero"
+    assert foo(False) == "int"

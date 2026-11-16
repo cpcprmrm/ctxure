@@ -1535,3 +1535,9 @@ def test_unstructure_dict_key_must_unstructure_to_str(declared):
     assert "Dict key must unstructure to str, got list: [1, 2]" in str(e.value)
     assert e.value.data is key
     assert e.value.ctx.structured_path == "$[~?]"
+
+
+def test_unstructure_unhashable_tuple_at_literal_union():
+    # A tuple holding a list passes isinstance(_, Hashable) but raises TypeError when hashed.
+    assert unstructure(Literal["none"] | tuple[list[int]], ([1],)) == [[1]]
+    assert unstructure(Literal["none"] | tuple[list[int]], "none") == "none"

@@ -1,6 +1,5 @@
 import sys
 from collections import deque
-from collections.abc import Hashable
 from dataclasses import Field, InitVar, fields
 from functools import lru_cache, reduce
 from types import GenericAlias, UnionType
@@ -75,10 +74,32 @@ def literal_key(v: Any) -> tuple[type, Any]:
     return type(v), v
 
 
+# Literal values grouped by exact type: {type(v): {v: entry}}.
+# Lookups check the type first, so runtime data is hashed only when its type is the type of some literal value.
+# Data such as a tuple or frozendict holding a list claims to be Hashable but raises TypeError when hashed.
+LiteralTable = dict[type, dict[Any, Any]]
+
+
+def add_literal(table: LiteralTable, v: Any, entry: Any) -> None:
+    # The first entry registered for a value wins.
+    table.setdefault(type(v), {}).setdefault(v, entry)
+
+
+def lookup_literal(table: LiteralTable, v: Any) -> Any:
+    by_value = table.get(type(v))
+    if by_value is None:
+        return None
+    try:
+        return by_value.get(v)
+    except TypeError:
+        # Reachable only with literal values outside PEP 586 (e.g., a tuple), which `typing` accepts at runtime.
+        return None
+
+
 def literal_values_contain(values: tuple[Any, ...], v: Any) -> bool:
-    if not isinstance(v, Hashable):
-        return False
-    return literal_key(v) in {literal_key(x) for x in values}
+    # Linear scan without hashing `v`; see `LiteralTable`.
+    t = type(v)
+    return any(type(x) is t and (x is v or x == v) for x in values)
 
 
 def literal_values_contain_all(values: tuple[Any, ...], candidates: tuple[Any, ...]) -> bool:

@@ -1,6 +1,6 @@
 import functools
 import inspect
-from collections.abc import Callable, Hashable, ItemsView, Sequence
+from collections.abc import Callable, ItemsView, Sequence
 from dataclasses import Field, dataclass, field, is_dataclass
 from types import GenericAlias
 from typing import (
@@ -23,13 +23,15 @@ from typing_extensions import TypeForm, is_typeddict
 
 from ctxure._typeutil import (
     TYPE_ALIAS_TYPES,
+    LiteralTable,
+    add_literal,
     get_type_params,
     is_nominal_subclass,
     is_type_alias,
     is_union,
-    literal_key,
     literal_values_contain_all,
     literal_values_equal,
+    lookup_literal,
     normalized_origin_args,
     resolve_base_args,
     resolve_type_alias,
@@ -579,13 +581,13 @@ class Multimethod:
     name: str
     tree: DispatchTree
     cache: dict[tuple[TypeForm, ...], Method]
-    literal_interest: list[dict[tuple[type, Any], TypeForm] | None]
+    literal_interest: list[LiteralTable | None]
 
     def __init__(self, name: str, func: Callable | None = None):
         self.name = name
         self.tree = DispatchTree()
         self.cache: dict[tuple[TypeForm, ...], Method] = {}
-        self.literal_interest: list[dict[tuple[type, Any], TypeForm] | None] = []
+        self.literal_interest: list[LiteralTable | None] = []
         if func:
             functools.update_wrapper(self, func)
 
@@ -609,9 +611,7 @@ class Multimethod:
             if slot is None:
                 slot = self.literal_interest[i] = {}
             for v in values:
-                key = literal_key(v)
-                if key not in slot:
-                    slot[key] = cast(TypeForm, Literal[v])
+                add_literal(slot, v, cast(TypeForm, Literal[v]))
             # Dirty micro-optimization: about 10% speed up for Literal-free cases.
             self.arg_type = self._arg_type_with_literal
 
@@ -651,8 +651,7 @@ class Multimethod:
         if (
             pos < len(self.literal_interest)
             and (slot := self.literal_interest[pos]) is not None
-            and isinstance(arg, Hashable)
-            and (lit_type := slot.get((type(arg), arg))) is not None
+            and (lit_type := lookup_literal(slot, arg)) is not None
         ):
             return lit_type
         atype = type(arg)
@@ -687,7 +686,9 @@ class Multimethod:
     def copy(self) -> "Multimethod":
         mm = Multimethod(self.name)
         mm.tree = self.tree.copy()
-        mm.literal_interest = [dict(s) if s is not None else None for s in self.literal_interest]
+        mm.literal_interest = [
+            {t: dict(by_value) for t, by_value in s.items()} if s is not None else None for s in self.literal_interest
+        ]
         if any(s is not None for s in mm.literal_interest):
             mm.arg_type = mm._arg_type_with_literal
         return mm

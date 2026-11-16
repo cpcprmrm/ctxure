@@ -1,6 +1,6 @@
 import base64
 import typing
-from collections.abc import Hashable, Sequence
+from collections.abc import Sequence
 from dataclasses import Field, fields, is_dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -20,8 +20,10 @@ from ctxure._location import KeySeg, format_field
 from ctxure._typeutil import (
     get_typeddict_extras_policy,
     is_union,
-    literal_key,
+    LiteralTable,
+    add_literal,
     literal_values_contain,
+    lookup_literal,
     normalized_origin_args,
     resolve_field_types,
     resolve_typeddict_field_types,
@@ -52,7 +54,7 @@ register = config.register
 
 class UnstructureSite(Site):
     _mm_arg_type: Any
-    _literal_targets: dict[tuple[type, Any], Any]
+    _literal_targets: LiteralTable
 
     def __init__(self, ctx: CtxImpl):
         super().__init__(ctx)
@@ -73,25 +75,22 @@ class UnstructureSite(Site):
             raise NoUnstructureHook(ctx, data)
 
     def dtype(self, data: Any) -> Any:
-        if self._literal_targets and isinstance(data, Hashable):
-            if promoted := self._literal_targets.get((type(data), data)):
-                return promoted
+        if self._literal_targets and (promoted := lookup_literal(self._literal_targets, data)):
+            return promoted
         return self._mm_arg_type(data)
 
 
-def _collect_target_literals(target: Any) -> dict[tuple[type, Any], Any]:
-    collected = {}
+def _collect_target_literals(target: Any) -> LiteralTable:
+    collected: LiteralTable = {}
     _walk_target_literals(target, collected)
     return collected
 
 
-def _walk_target_literals(t: Any, lookup: dict[tuple[type, Any], Any]) -> None:
+def _walk_target_literals(t: Any, lookup: LiteralTable) -> None:
     origin, args = normalized_origin_args(t)
     if origin is Literal:
         for v in args:
-            key = literal_key(v)
-            if key not in lookup:
-                lookup[key] = Literal[v]
+            add_literal(lookup, v, Literal[v])
     elif is_union(t):
         for m in get_args(t):
             _walk_target_literals(m, lookup)

@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Literal, NewType, TypeVar, TypedDict
+from typing import Any, Generic, Literal, NewType, TypeVar, TypedDict
 
 import pytest
 from typing_extensions import TypedDict as ExtTypedDict
@@ -1405,3 +1405,16 @@ def test_unstructure_hook_get_parent_data_nested_container(testregister):
         assert unstructure(list[list[int]], [[2]]) == [[2]]
 
     assert seen == [[1], [2]]
+
+
+def test_unstructure_hook_literal_data_with_unhashable_tuple(testregister):
+    # A Literal data hint makes every unstructuring look the data up among literal values.
+    # A tuple holding a list passes isinstance(_, Hashable) but raises TypeError when hashed.
+    @testregister
+    def unstructure_hook(ctx: Ctx[str], data: Literal["x"]) -> str:
+        return "X"
+
+    with ctxure_config(dispatcher=testregister):
+        assert unstructure(tuple[list[int]], ([1],)) == [[1]]
+        assert unstructure(Any, ([1],)) == [[1]]
+        assert unstructure(str, "x") == "X"

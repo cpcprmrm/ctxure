@@ -2112,3 +2112,27 @@ AliasB = TypeAliasType("AliasB", AliasA)
 
 def test_structure_transitive_alias_chain():
     assert structure(AliasB, 1) == 1
+
+
+def test_structure_unhashable_tuple_at_literal_union():
+    # A tuple holding a list passes isinstance(_, Hashable) but raises TypeError when hashed.
+    assert structure(Literal["none"] | list[list[int]], ([1],)) == [[1]]
+    assert structure(Literal["none"] | tuple[list[int]], ([1],)) == ([1],)
+
+
+def test_structure_literal_rejects_unhashable_tuple():
+    data = ([1],)
+    with pytest.raises(ValidationError) as e:
+        structure(Literal["a", "b"], data)
+    assert e.value.data is data
+
+
+def test_structure_non_pep586_tuple_literal_with_unhashable_tuple():
+    # `typing` accepts tuple literal values at runtime, so tuple data reaches the per-type table.
+    # Note that `Literal[(1, 2)]` is `Literal[1, 2]`; the tuple value needs another pair of parentheses.
+    assert structure(Literal[((1, 2),)] | list[list[int]], ([1],)) == [[1]]
+
+
+def test_structure_literal_union_keeps_bool_and_int_apart():
+    assert structure(Literal[0] | bool, False) is False
+    assert structure(Literal[0] | bool, 0) == 0
